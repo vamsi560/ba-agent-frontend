@@ -573,14 +573,16 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
             <span className="action-hint">{showMetrics ? 'Click to collapse' : 'Hover to expand'}</span>
           </div>
           <div className="drawer-content">
-            {metrics ? (
+            {metrics && !metrics.error ? (
               <div className="metrics-summary-view">
-                <div className="mini-stat"><strong>Effort:</strong> {metrics.summary.total_backlog_effort} pts</div>
-                <div className="mini-stat"><strong>Complexity:</strong> {metrics.summary.average_item_complexity}</div>
+                <div className="mini-stat"><strong>Effort:</strong> {metrics.summary?.total_backlog_effort || 0} pts</div>
+                <div className="mini-stat"><strong>Complexity:</strong> {metrics.summary?.average_item_complexity || 0}</div>
                 <ul className="mini-list">
-                  {metrics.planning_insights.slice(0, 2).map((ins, i) => <li key={i}>{ins}</li>)}
+                  {metrics.planning_insights?.slice(0, 2).map((ins, i) => <li key={i}>{ins}</li>)}
                 </ul>
               </div>
+            ) : metrics?.error ? (
+              <div className="error-hint">⚠️ {metrics.error}</div>
             ) : "Calculating..."}
           </div>
         </div>
