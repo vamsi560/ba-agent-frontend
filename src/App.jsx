@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'; // Enterprise Discovery Platform v1.1
 import ReactMarkdown from 'react-markdown';
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:8000'
-  : window.location.origin;
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:8000'
+    : 'https://ba-agent-aqd8c3d8dtdrbcat.centralus-01.azurewebsites.net'
+);
 
 // --- Components ---
 
