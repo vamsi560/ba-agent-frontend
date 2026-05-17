@@ -233,6 +233,49 @@ input:focus, select:focus, textarea:focus {
   overflow: hidden;
 }
 
+.brand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.sidebar-toggle {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+  background: var(--accent-primary);
+  color: #000;
+}
+
+.app-layout.collapsed .sidebar {
+  padding: 20px 10px;
+}
+
+.app-layout.collapsed .brand {
+  justify-content: center;
+}
+
+.app-layout.collapsed .nav-label {
+  display: none;
+}
+
+.app-layout.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px;
+}
+
 .app-layout {
   grid-template-columns: 240px 1fr; /* Reduced from 280px */
 }
@@ -302,6 +345,11 @@ input:focus, select:focus, textarea:focus {
   gap: 12px;
   padding-top: 24px;
   border-top: 1px solid var(--glass-border);
+}
+
+.app-layout.collapsed .user-profile {
+  justify-content: center;
+  padding-top: 16px;
 }
 
 .avatar {
