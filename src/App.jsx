@@ -68,7 +68,7 @@ function App() {
     } catch (e) { console.error("Data Fetch Error", e); }
   };
 
-  const startAutomatedWorkflow = async (file) => {
+  const startAutomatedWorkflow = async (file, channel = "document") => {
     setLoading(true);
     setCompletedSteps([]);
     setCurrentView('workflow');
@@ -78,6 +78,8 @@ function App() {
       setActiveStep(1);
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('channel', channel);
+      formData.append('lob', selectedLOB);
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
 
@@ -104,7 +106,15 @@ function App() {
         throw new Error(anaData.detail || "Analysis failed to return structured results.");
       }
 
-      const questions = anaData.results.clarification_questions || [];
+      let questions = anaData.results.clarification_questions || [];
+      
+      // Inject Ambiguities from Phase 1
+      if (ingestData.ambiguity_report && ingestData.ambiguity_report.ambiguities) {
+         const ambQuestions = ingestData.ambiguity_report.ambiguities.map(a => 
+             `[AMBIGUITY: "${a.requirement.substring(0, 50)}..."] ${a.issue} -> ${a.clarification_question}`
+         );
+         questions = [...ambQuestions, ...questions];
+      }
 
       setWorkflowData(prev => ({
         ...prev,
@@ -314,41 +324,41 @@ function App() {
 
         <nav className="side-nav">
           <div className="nav-group">
-            <div className="nav-label">Core Engine</div>
+            <div className="nav-label">Intelligence Hub</div>
             <div className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Dashboard"}
+              <span className="nav-icon">📊</span> {!isSidebarCollapsed && "Command Center"}
             </div>
+            <div className={`nav-item ${currentView === 'knowledge_vault' ? 'active' : ''}`} onClick={() => setCurrentView('knowledge_vault')}>
+              <span className="nav-icon">🧠</span> {!isSidebarCollapsed && "Institutional Memory"}
+            </div>
+          </div>
+
+          <div className="nav-group">
+            <div className="nav-label">Delivery OS</div>
             <div className={`nav-item ${currentView === 'new_analysis' ? 'active' : ''}`} onClick={() => {
               setCurrentView('new_analysis');
               setSelectedModules(['gaps', 'trd', 'flow', 'backlog']);
             }}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Full Discovery"}
+              <span className="nav-icon">🚀</span> {!isSidebarCollapsed && "Discovery Swarm"}
             </div>
             <div className={`nav-item ${currentView === 'work_items' ? 'active' : ''}`} onClick={() => setCurrentView('work_items')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Backlog Explorer"}
+              <span className="nav-icon">📋</span> {!isSidebarCollapsed && "Backlog Explorer"}
+            </div>
+            <div className={`nav-item ${currentView === 'traceability' ? 'active' : ''}`} onClick={() => setCurrentView('traceability')}>
+              <span className="nav-icon">🛡️</span> {!isSidebarCollapsed && "Governance Matrix"}
             </div>
           </div>
 
           <div className="nav-group">
-            <div className="nav-label">Quick Tools</div>
+            <div className="nav-label">Agentic Tools</div>
             <div className={`nav-item ${currentView === 'gap_detective' ? 'active' : ''}`} onClick={() => setCurrentView('gap_detective')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Gap Detective"}
+              <span className="nav-icon">🔍</span> {!isSidebarCollapsed && "Gap Detective"}
             </div>
             <div className={`nav-item ${currentView === 'spec_architect' ? 'active' : ''}`} onClick={() => setCurrentView('spec_architect')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Spec Architect"}
+              <span className="nav-icon">🏗️</span> {!isSidebarCollapsed && "Spec Architect"}
             </div>
             <div className={`nav-item ${currentView === 'flow_designer' ? 'active' : ''}`} onClick={() => setCurrentView('flow_designer')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Flow Designer"}
-            </div>
-            <div className={`nav-item ${currentView === 'backlog_engineer' ? 'active' : ''}`} onClick={() => setCurrentView('backlog_engineer')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && "Backlog Engineer"}
-            </div>
-          </div>
-
-          <div className="nav-group">
-            {!isSidebarCollapsed && <div className="nav-label">Agents</div>}
-            <div className={`nav-item ${currentView === 'new_analysis' ? 'active' : ''}`} onClick={() => setCurrentView('new_analysis')}>
-              <span className="nav-icon"></span> {!isSidebarCollapsed && 'New Analysis'}
+              <span className="nav-icon">🎨</span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
           </div>
         </nav>
@@ -425,6 +435,14 @@ function App() {
           <BacklogEngineerView />
         )}
 
+        {currentView === 'traceability' && (
+          <TraceabilityMatrixView />
+        )}
+
+        {currentView === 'knowledge_vault' && (
+          <KnowledgeVaultView />
+        )}
+
         {currentView === 'workflow' && (
           <WorkflowView
             activeStep={activeStep}
@@ -497,52 +515,74 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
     <div className="view-container">
       <header className="view-header">
         <div className="title-area">
-          <h1>Operational Intelligence</h1>
-          <p>Real-time status of your engineering discovery pipeline.</p>
+          <span className="pre-title">Cognitive Command Center</span>
+          <h1>Enterprise Dashboard</h1>
+          <p>Real-time orchestration and institutional memory health.</p>
         </div>
         <div className="header-actions">
-          <div className="search-pill">
-            <span className="search-icon"></span>
-            <input type="text" placeholder="Search repository..." />
-          </div>
+           <div className="council-vitals glass-card" style={{ padding: '8px 16px', display: 'flex', gap: '20px', alignItems: 'center' }}>
+              <div className="vital-item">
+                <span className="status-dot pulse"></span> Council Active
+              </div>
+              <div className="vital-item">
+                <span className="val" style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>3.2k</span> Memory Points
+              </div>
+           </div>
         </div>
       </header>
 
       <div className="stat-tiles">
         <div className={`stat-tile glass-card ${filter === 'documents' ? 'active' : ''}`} onClick={() => setFilter('documents')}>
           <div className="tile-top">
-            <span className="tile-icon"></span>
+            <span className="tile-label">INGESTION</span>
             <span className="tile-trend up">↑ 12%</span>
           </div>
           <div className="tile-main">
             <div className="tile-val">{stats.documents}</div>
-            <div className="tile-label">Total Ingested</div>
+            <div className="tile-label" style={{ fontSize: '0.6rem', opacity: 0.6 }}>Cloud Ingested Documents</div>
           </div>
-          <div className="tile-footer">Documents archived to cloud</div>
         </div>
 
         <div className={`stat-tile glass-card ${filter === 'analyses' ? 'active' : ''}`} onClick={() => setFilter('analyses')}>
           <div className="tile-top">
-            <span className="tile-icon"></span>
+            <span className="tile-label">GOVERNANCE</span>
             <span className="tile-trend">Stable</span>
           </div>
           <div className="tile-main">
             <div className="tile-val">{stats.analyses}</div>
-            <div className="tile-label">Gap Analyses</div>
+            <div className="tile-label" style={{ fontSize: '0.6rem', opacity: 0.6 }}>Risk Vetted Projects</div>
           </div>
-          <div className="tile-footer">Risk assessment complete</div>
         </div>
 
         <div className={`stat-tile glass-card`}>
           <div className="tile-top">
-            <span className="tile-icon"></span>
+            <span className="tile-label">SDLC VELOCITY</span>
             <span className="tile-trend up">↑ 8%</span>
           </div>
           <div className="tile-main">
             <div className="tile-val">94%</div>
-            <div className="tile-label">ADO Sync Rate</div>
+            <div className="tile-label" style={{ fontSize: '0.6rem', opacity: 0.6 }}>ADO Sync Success Rate</div>
           </div>
-          <div className="tile-footer">Successful work item mapping</div>
+        </div>
+      </div>
+
+      <div className="swarm-intelligence-area glass-card" style={{ marginTop: '24px', padding: '24px' }}>
+        <h3 style={{ fontSize: '0.8rem', letterSpacing: '0.1em', opacity: 0.6, marginBottom: '20px' }}>ACTIVE COUNCIL STATUS</h3>
+        <div className="council-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+          {[
+            { name: '🛡️ SECURITY', status: 'Active', load: 'Minimal' },
+            { name: '🎨 UX/UI', status: 'Idle', load: 'N/A' },
+            { name: '🏗️ ARCHITECT', status: 'Active', load: 'Nominal' },
+            { name: '🧪 QA/TEST', status: 'Active', load: 'Nominal' }
+          ].map(agent => (
+            <div key={agent.name} className="agent-status-mini" style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
+               <div style={{ fontSize: '0.7rem', fontWeight: '700', marginBottom: '8px' }}>{agent.name}</div>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: agent.status === 'Active' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>● {agent.status}</span>
+                  <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>{agent.load}</span>
+               </div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -629,93 +669,140 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
 );
 };
 
-const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules, onToggleModule }) => (
-  <div className="view-container">
-    <header className="view-header" style={{ textAlign: 'center', display: 'block' }}>
-      <div className="title-area">
-        <span className="pre-title">Discovery Engine</span>
-        <h1>Initialize Project Analysis</h1>
-        <p>Select your primary requirement source and target Line of Business (LOB) to trigger the Requify workflow.</p>
-      </div>
-    </header>
+const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules, onToggleModule }) => {
+  const [ingestMode, setIngestMode] = useState('file'); // file, text, visual, meeting
+  const [inputText, setInputText] = useState("");
 
-    <div className="lob-selector-container animation-fade-in">
-      <label>Select Line of Business (RAG Context)</label>
-      <div className="lob-grid">
-        {['Personal Auto', 'Homeowners', 'Commercial Property', 'Workers Compensation', 'General Liability', 'Inland Marine'].map(lob => (
-          <div
-            key={lob}
-            className={`lob-chip ${selectedLOB === lob ? 'active' : ''}`}
-            onClick={() => setSelectedLOB(lob)}
-          >
-            {lob}
+  const handleTextSubmit = () => {
+    if (!inputText.trim()) return;
+    // We wrap text in a pseudo-file object or send as JSON
+    const blob = new Blob([inputText], { type: 'text/plain' });
+    const file = new File([blob], "direct_input.txt", { type: 'text/plain' });
+    onSelect(file, "text");
+  };
+
+  return (
+    <div className="view-container">
+      <header className="view-header" style={{ textAlign: 'center', display: 'block' }}>
+        <div className="title-area">
+          <span className="pre-title">Unified Ingestion Engine</span>
+          <h1>Cognitive Ingestion Hub</h1>
+          <p>Provide source material via any channel—Documents, Visuals, or Transcripts.</p>
+        </div>
+      </header>
+
+      <div className="ingestion-tabs-container" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '24px' }}>
+         {['file', 'text', 'visual', 'meeting'].map(mode => (
+           <button 
+             key={mode} 
+             className={`btn-tab ${ingestMode === mode ? 'active' : ''}`}
+             onClick={() => setIngestMode(mode)}
+             style={{ textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.1em' }}
+           >
+             {mode === 'file' && '📄 Document'}
+             {mode === 'text' && '✍️ Direct Text'}
+             {mode === 'visual' && '🖼️ Visuals'}
+             {mode === 'meeting' && '🎙️ Meetings'}
+           </button>
+         ))}
+      </div>
+
+      {ingestMode === 'file' && (
+        <div className="discovery-tile glass-card" style={{ maxWidth: '800px', margin: '0 auto 32px' }} onClick={() => document.getElementById('brd-up').click()}>
+          <div className="tile-accent yellow"></div>
+          <div className="tile-icon">📂</div>
+          <div className="tile-info">
+            <h3>Upload Source Document</h3>
+            <p>Analyze BRD, PRD, or functional specs (PDF, DOCX)</p>
           </div>
-        ))}
-      </div>
-      <p className="rag-intel-hint">✨ Intelligence: Selecting an LOB will enable RAG-based context injection for higher TRD accuracy.</p>
-    </div>
-    <div className="module-selection-container glass-card animation-fade-in">
-      <div className="module-header">
-        <span className="icon"></span>
-        <h3>Toolkit Configuration</h3>
-        <p>Enable only the agents and artifacts you need for this discovery session.</p>
-      </div>
-      <div className="module-grid">
-        {[
-          { id: 'gaps', label: 'Gap Analysis & Reviews', icon: '🔍' },
-          { id: 'trd', label: 'Technical Spec (TRD)', icon: '📝' },
-          { id: 'flow', label: 'Visual Process Flow', icon: '🎋' },
-          { id: 'backlog', label: 'Enterprise Backlog', icon: '📂' }
-        ].map(module => (
-          <label key={module.id} className={`module-chip ${selectedModules.includes(module.id) ? 'active' : ''}`}>
-            <input 
-              type="checkbox" 
-              checked={selectedModules.includes(module.id)} 
-              onChange={() => onToggleModule(module.id)}
-              hidden 
-            />
-            <span className="mod-icon">{module.icon}</span>
-            <span className="mod-label">{module.label}</span>
-          </label>
-        ))}
-      </div>
-    </div>
-
-
-    <div className="discovery-grid">
-      <div className="discovery-tile glass-card" onClick={() => document.getElementById('brd-up').click()}>
-        <div className="tile-accent yellow"></div>
-        <div className="tile-icon">📂</div>
-        <div className="tile-info">
-          <h3>Upload Document</h3>
-          <p>Extract from BRD/PRD (PDF, DOCX)</p>
+          <input type="file" id="brd-up" hidden onChange={(e) => onSelect(e.target.files[0], "document")} />
+          <div className="tile-action">Analyze Document</div>
         </div>
-        <input type="file" id="brd-up" hidden onChange={(e) => onSelect(e.target.files[0])} />
-        <div className="tile-action">Launch Agent</div>
-      </div>
+      )}
 
-      <div className="discovery-tile glass-card">
-        <div className="tile-accent cyan"></div>
-        <div className="tile-icon">⌨️</div>
-        <div className="tile-info">
-          <h3>Drafting Agent</h3>
-          <p>Iterative requirement gathering</p>
+      {ingestMode === 'text' && (
+        <div className="text-ingestion-area glass-card" style={{ maxWidth: '800px', margin: '0 auto 32px', padding: '24px' }}>
+           <textarea 
+             placeholder="Paste requirements, user stories, or unformatted notes here..."
+             value={inputText}
+             onChange={(e) => setInputText(e.target.value)}
+             style={{ width: '100%', height: '200px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', padding: '16px', marginBottom: '16px' }}
+           />
+           <button className="btn-primary" style={{ width: '100%' }} onClick={handleTextSubmit}>
+             Analyze Requirements
+           </button>
         </div>
-        <div className="tile-action">Start Interview</div>
-      </div>
+      )}
 
-      <div className="discovery-tile glass-card">
-        <div className="tile-accent purple"></div>
-        <div className="tile-icon">☁️</div>
-        <div className="tile-info">
-          <h3>Cloud Sync</h3>
-          <p>Import from OneDrive / SharePoint</p>
+      {ingestMode === 'visual' && (
+        <div className="discovery-tile glass-card" style={{ maxWidth: '800px', margin: '0 auto 32px' }} onClick={() => document.getElementById('img-up').click()}>
+          <div className="tile-accent cyan"></div>
+          <div className="tile-icon">🖼️</div>
+          <div className="tile-info">
+            <h3>Vision Agent: Wireframe Scan</h3>
+            <p>Upload wireframes, screenshots, or whiteboard photos</p>
+          </div>
+          <input type="file" id="img-up" accept="image/*" hidden onChange={(e) => onSelect(e.target.files[0], "visual")} />
+          <div className="tile-action">Analyze Visuals</div>
         </div>
-        <div className="tile-action">Browse Files</div>
+      )}
+
+      {ingestMode === 'meeting' && (
+        <div className="discovery-tile glass-card" style={{ maxWidth: '800px', margin: '0 auto 32px' }} onClick={() => document.getElementById('meet-up').click()}>
+          <div className="tile-accent purple"></div>
+          <div className="tile-icon">🎙️</div>
+          <div className="tile-info">
+            <h3>Meeting Transcript Ingestion</h3>
+            <p>Analyze Zoom/Teams transcripts or recorded summaries</p>
+          </div>
+          <input type="file" id="meet-up" hidden onChange={(e) => onSelect(e.target.files[0], "meeting")} />
+          <div className="tile-action">Analyze Transcript</div>
+        </div>
+      )}
+
+      <div className="lob-selector-container animation-fade-in" style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <label>Select Target Context (LOB)</label>
+        <div className="lob-grid">
+          {['Personal Auto', 'Homeowners', 'Commercial Property', 'Workers Compensation', 'General Liability', 'Inland Marine'].map(lob => (
+            <div
+              key={lob}
+              className={`lob-chip ${selectedLOB === lob ? 'active' : ''}`}
+              onClick={() => setSelectedLOB(lob)}
+            >
+              {lob}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      <div className="module-selection-container glass-card animation-fade-in" style={{ maxWidth: '800px', margin: '24px auto' }}>
+        <div className="module-header">
+          <h3>Toolkit Configuration</h3>
+          <p>Enable the specialized agents for this discovery session.</p>
+        </div>
+        <div className="module-grid">
+          {[
+            { id: 'gaps', label: 'Gap Analysis', icon: '🔍' },
+            { id: 'trd', label: 'Tech Spec', icon: '📝' },
+            { id: 'flow', label: 'Process Flow', icon: '🎋' },
+            { id: 'backlog', label: 'Backlog', icon: '📂' }
+          ].map(module => (
+            <label key={module.id} className={`module-chip ${selectedModules.includes(module.id) ? 'active' : ''}`}>
+              <input 
+                type="checkbox" 
+                checked={selectedModules.includes(module.id)} 
+                onChange={() => onToggleModule(module.id)}
+                hidden 
+              />
+              <span className="mod-icon">{module.icon}</span>
+              <span className="mod-label">{module.label}</span>
+            </label>
+          ))}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isSyncing, onToggle }) => {
   const [activeReviewTab, setActiveReviewTab] = useState('trd'); // 'trd', 'backlog', 'flow'
@@ -753,12 +840,19 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
           </div>
         );
       case 'gaps':
+        const reviews = data.reviews || {};
         return (
           <div className="step-result-card glass-card">
-            <h4>{step.icon} Risk & Gap Assessment</h4>
+            <h4>{step.icon} Risk & Agentic Council Review</h4>
+            <div className="council-badges" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+               <span className={`badge-sm ${reviews.Security ? 'active' : ''}`}>🛡️ Security</span>
+               <span className={`badge-sm ${reviews.UX ? 'active' : ''}`}>🎨 UX</span>
+               <span className={`badge-sm ${reviews.Architecture ? 'active' : ''}`}>🏗️ Arch</span>
+               <span className={`badge-sm ${reviews.QA ? 'active' : ''}`}>🧪 QA</span>
+            </div>
             <div className="gap-list">
               {stepData.gaps?.slice(0, 3).map((gap, i) => (
-                <div key={i} className="gap-item">⚠️ {gap.requirement || gap}</div>
+                <div key={i} className="gap-item">⚠️ {gap.title || gap.requirement || gap}</div>
               ))}
               {stepData.risks?.length > 0 && (
                 <div className="risk-tag">+{stepData.risks.length} Risks Identified</div>
@@ -887,6 +981,7 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                   <button className={`btn-tab ${activeReviewTab === 'backlog' ? 'active' : ''}`} onClick={() => setActiveReviewTab('backlog')}>Backlog Tree</button>
                   <button className={`btn-tab ${activeReviewTab === 'traceability' ? 'active' : ''}`} onClick={() => setActiveReviewTab('traceability')}>Traceability Matrix</button>
                   <button className={`btn-tab ${activeReviewTab === 'flow' ? 'active' : ''}`} onClick={() => setActiveReviewTab('flow')}>Visual Flow</button>
+                  <button className={`btn-tab ${activeReviewTab === 'governance' ? 'active' : ''}`} onClick={() => setActiveReviewTab('governance')}>🛡️ Governance Trail</button>
                 </div>
               </div>
 
@@ -928,6 +1023,12 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                 {activeReviewTab === 'flow' && (
                   <div className="panel flow-panel full-width animation-fade-in">
                     <VisualFlow diagram={data.diagram} />
+                  </div>
+                )}
+
+                {activeReviewTab === 'governance' && (
+                  <div className="panel governance-panel full-width animation-fade-in">
+                    <GovernanceDashboard documentId={data.docId} />
                   </div>
                 )}
 
@@ -1716,6 +1817,14 @@ const GapDetectiveView = () => {
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
 
+      if (ingestData.ambiguity_report?.is_ambiguous) {
+        const amb = ingestData.ambiguity_report.ambiguities.map(a => `- ${a.requirement}: ${a.issue}`).join('\n');
+        if (!window.confirm(`⚠️ AMBIGUITIES DETECTED:\n\n${amb}\n\nProceed anyway?`)) {
+          setLoading(false);
+          return;
+        }
+      }
+
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1760,15 +1869,28 @@ const GapDetectiveView = () => {
       </header>
 
       {!results ? (
-        <div className="discovery-tile glass-card" onClick={() => document.getElementById('gap-up').click()}>
-          <div className="tile-accent yellow"></div>
-          <div className="tile-icon"></div>
-          <div className="tile-info">
-            <h3>Start Deep Scan</h3>
-            <p>Upload BRD/PRD for instant gap detection</p>
+        <div className="agent-studio-ingest glass-card" style={{ maxWidth: '900px', margin: '40px auto', padding: '60px', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+          <div className="radar-animation" style={{ position: 'absolute', top: '-100px', right: '-100px', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(210, 153, 34, 0.1) 0%, transparent 70%)', borderRadius: '50%', animation: 'radar-sweep 4s infinite linear' }}></div>
+          
+          <div className="studio-header" style={{ marginBottom: '40px' }}>
+             <span className="badge-sm active" style={{ marginBottom: '16px', display: 'inline-block' }}>STRESS TEST READY</span>
+             <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '12px' }}>Adversarial Gap Detective</h2>
+             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Identify contradictions, technical oversights, and business rule gaps.</p>
+          </div>
+
+          <div className="studio-dropzone glass-card" onClick={() => document.getElementById('gap-up').click()} style={{ border: '2px dashed var(--glass-border)', padding: '40px', cursor: 'pointer', transition: 'all 0.3s ease' }}>
+             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🕵️‍♂️</div>
+             <h4 style={{ marginBottom: '8px' }}>Drop Specification for Deep Scan</h4>
+             <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Supports PDF, DOCX, and Direct Text analysis</p>
+             <button className="btn-primary" style={{ marginTop: '24px', padding: '12px 32px' }}>INITIALIZE SCAN</button>
+          </div>
+          
+          <div className="studio-footer" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '32px', opacity: 0.5, fontSize: '0.75rem' }}>
+             <span>✓ 4 Specialized Personas</span>
+             <span>✓ Contradiction Mapping</span>
+             <span>✓ Impact Assessment</span>
           </div>
           <input type="file" id="gap-up" hidden onChange={(e) => handleAnalyze(e.target.files[0])} />
-          <div className="tile-action">Launch Detective</div>
         </div>
       ) : (
         <div className="gap-dashboard-grid">
@@ -1820,6 +1942,14 @@ const SpecArchitectView = () => {
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
 
+      if (ingestData.ambiguity_report?.is_ambiguous) {
+        const amb = ingestData.ambiguity_report.ambiguities.map(a => `- ${a.requirement}: ${a.issue}`).join('\n');
+        if (!window.confirm(`⚠️ AMBIGUITIES DETECTED:\n\n${amb}\n\nProceed anyway?`)) {
+          setLoading(false);
+          return;
+        }
+      }
+
       // Step 2: Baseline Analysis
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
@@ -1867,15 +1997,26 @@ const SpecArchitectView = () => {
       </header>
 
       {!trd ? (
-        <div className="discovery-tile glass-card" onClick={() => document.getElementById('trd-up-tool').click()}>
-          <div className="tile-accent cyan"></div>
-          <div className="tile-icon"></div>
-          <div className="tile-info">
-            <h3>Draft New Specification</h3>
-            <p>Upload source documents to generate a professional TRD</p>
+        <div className="agent-studio-ingest glass-card" style={{ maxWidth: '900px', margin: '40px auto', padding: '60px', textAlign: 'center', position: 'relative', overflow: 'hidden', background: 'repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0, 243, 255, 0.03) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0, 243, 255, 0.03) 20px)' }}>
+          <div className="studio-header" style={{ marginBottom: '40px' }}>
+             <span className="badge-sm active" style={{ marginBottom: '16px', display: 'inline-block', background: 'rgba(0, 243, 255, 0.1)', color: 'var(--accent-primary)' }}>BLUEPRINT ENGINE ACTIVE</span>
+             <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '12px' }}>Spec Architect Studio</h2>
+             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Convert business requirements into engineering-ready Technical Specifications.</p>
+          </div>
+
+          <div className="studio-dropzone glass-card" onClick={() => document.getElementById('trd-up-tool').click()} style={{ border: '2px dashed var(--accent-primary)', padding: '40px', cursor: 'pointer', background: 'rgba(0,0,0,0.3)' }}>
+             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🏗️</div>
+             <h4 style={{ marginBottom: '8px' }}>Ingest Material for Architecture</h4>
+             <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Our agents will draft a complete TRD based on your source input.</p>
+             <button className="btn-primary" style={{ marginTop: '24px', padding: '12px 32px' }}>LAUNCH ARCHITECT</button>
+          </div>
+          
+          <div className="studio-footer" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '32px', opacity: 0.5, fontSize: '0.75rem' }}>
+             <span>✓ Automated Sectioning</span>
+             <span>✓ Architecture Recommendations</span>
+             <span>✓ Export-Ready Markdown</span>
           </div>
           <input type="file" id="trd-up-tool" hidden onChange={(e) => handleGenerateTRD(e.target.files[0])} />
-          <div className="tile-action">Launch Architect</div>
         </div>
       ) : (
         <div className="trd-studio-layout">
@@ -1917,6 +2058,14 @@ const FlowDesignerView = () => {
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
 
+      if (ingestData.ambiguity_report?.is_ambiguous) {
+        const amb = ingestData.ambiguity_report.ambiguities.map(a => `- ${a.requirement}: ${a.issue}`).join('\n');
+        if (!window.confirm(`⚠️ AMBIGUITIES DETECTED:\n\n${amb}\n\nProceed anyway?`)) {
+          setLoading(false);
+          return;
+        }
+      }
+
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1954,15 +2103,26 @@ const FlowDesignerView = () => {
       </header>
 
       {!diagram ? (
-        <div className="discovery-tile glass-card" onClick={() => document.getElementById('flow-up-tool').click()}>
-          <div className="tile-accent purple"></div>
-          <div className="tile-icon"></div>
-          <div className="tile-info">
-            <h3>Visualize Process Logic</h3>
-            <p>Upload source documents to generate automated process diagrams</p>
+        <div className="agent-studio-ingest glass-card" style={{ maxWidth: '900px', margin: '40px auto', padding: '60px', textAlign: 'center', position: 'relative', overflow: 'hidden', background: 'radial-gradient(circle at center, rgba(112, 0, 255, 0.05) 0%, transparent 70%)' }}>
+          <div className="studio-header" style={{ marginBottom: '40px' }}>
+             <span className="badge-sm active" style={{ marginBottom: '16px', display: 'inline-block', background: 'rgba(112, 0, 255, 0.1)', color: 'var(--accent-secondary)' }}>LOGIC ENGINE READY</span>
+             <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '12px' }}>Flow Designer Studio</h2>
+             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Map business processes into high-fidelity technical flow diagrams.</p>
+          </div>
+
+          <div className="studio-dropzone glass-card" onClick={() => document.getElementById('flow-up-tool').click()} style={{ border: '2px dashed var(--accent-secondary)', padding: '40px', cursor: 'pointer', background: 'rgba(0,0,0,0.3)' }}>
+             <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🎨</div>
+             <h4 style={{ marginBottom: '8px' }}>Ingest Logic for Visualization</h4>
+             <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Our Visual Agent will synthesize process flows from your requirements.</p>
+             <button className="btn-primary" style={{ marginTop: '24px', padding: '12px 32px', background: 'var(--accent-secondary)' }}>LAUNCH DESIGNER</button>
+          </div>
+          
+          <div className="studio-footer" style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '32px', opacity: 0.5, fontSize: '0.75rem' }}>
+             <span>✓ Automated Mermaid Generation</span>
+             <span>✓ Logic Conflict Detection</span>
+             <span>✓ Interactive Canvas</span>
           </div>
           <input type="file" id="flow-up-tool" hidden onChange={(e) => handleGenerateFlow(e.target.files[0])} />
-          <div className="tile-action">Launch Designer</div>
         </div>
       ) : (
         <div className="flow-canvas-layout">
@@ -2014,6 +2174,14 @@ const BacklogEngineerView = () => {
       formData.append('file', file);
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
+
+      if (ingestData.ambiguity_report?.is_ambiguous) {
+        const amb = ingestData.ambiguity_report.ambiguities.map(a => `- ${a.requirement}: ${a.issue}`).join('\n');
+        if (!window.confirm(`⚠️ AMBIGUITIES DETECTED:\n\n${amb}\n\nProceed anyway?`)) {
+          setLoading(false);
+          return;
+        }
+      }
 
       const analyzeRes = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
@@ -2137,5 +2305,223 @@ const BacklogEngineerView = () => {
     </div>
   );
 };
+
+
+// Project View Export
+const TraceabilityMatrixView = () => {
+  const [loading, setLoading] = useState(false);
+  const [matrix, setMatrix] = useState([]);
+  const [docs, setDocs] = useState([]);
+  const [selectedDoc, setSelectedDoc] = useState("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/documents`).then(r => r.json()).then(setDocs);
+  }, []);
+
+  const loadMatrix = async (docId) => {
+    if (!docId) return;
+    setLoading(true);
+    setSelectedDoc(docId);
+    try {
+      const res = await fetch(`${API_BASE}/traceability/${docId}`);
+      const data = await res.json();
+      setMatrix(data.matrix || []);
+    } catch (e) {
+      alert("Traceability Error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="view-container animation-fade-in">
+      <header className="view-header">
+        <div className="title-area">
+          <span className="pre-title">Governance Agent</span>
+          <h1>Traceability Matrix</h1>
+          <p>End-to-end audit trail from Business Requirement to Engineering Artifact.</p>
+        </div>
+        <div className="header-actions">
+           {selectedDoc && (
+             <button 
+               className="btn-primary" 
+               onClick={() => window.open(`${API_BASE}/reports/traceability/${selectedDoc}`, '_blank')}
+             >
+               📄 Download Governance Report (PDF)
+             </button>
+           )}
+        </div>
+      </header>
+
+      <div className="traceability-controls glass-card" style={{ marginBottom: "24px", padding: "20px" }}>
+        <label>Select Project/Document:</label>
+        <select onChange={(e) => loadMatrix(e.target.value)} value={selectedDoc} style={{ marginTop: "8px" }}>
+          <option value="">-- Choose Project --</option>
+          {docs.map(d => <option key={d.id} value={d.id}>{d.name} ({d.id.substring(0,8)})</option>)}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="loader-container"><div className="loader-ring"></div><p>Calculating traceability paths...</p></div>
+      ) : matrix.length > 0 ? (
+        <div className="traceability-table-wrapper glass-card">
+          <table className="traceability-table">
+            <thead>
+              <tr>
+                <th>Req ID</th>
+                <th>Business Requirement</th>
+                <th>Linked Engineering Artifacts (ADO)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.map((row, i) => (
+                <tr key={i}>
+                  <td><span className="id-pill">{row.source_id}</span></td>
+                  <td>{row.source_desc}</td>
+                  <td>
+                    {row.links && row.links.length > 0 ? row.links.map(link => (
+                      <div key={link.id} className="linked-item">
+                         <span className="item-type">STORY</span> {link.title}
+                      </div>
+                    )) : <span className="orphan-tag">NO LINKED ITEMS</span>}
+                  </td>
+                  <td>
+                    <span className={`status-pill ${row.links && row.links.length > 0 ? "mapped" : "risk"}`}>
+                      {row.links && row.links.length > 0 ? "MAPPED" : "UNMAPPED RISK"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">Please select a project to view the traceability matrix.</div>
+      )}
+    </div>
+  );
+};
+
+const KnowledgeVaultView = () => {
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState("");
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!query.trim()) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/knowledge/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setResults(data.results);
+    } catch (err) {
+      setResults("Search Failed: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="view-container animation-fade-in">
+      <header className="view-header">
+        <div className="title-area">
+          <span className="pre-title">Cognitive Intelligence</span>
+          <h1>Institutional Memory</h1>
+          <p>Semantic search across 12,000+ organizational requirements and technical patterns.</p>
+        </div>
+      </header>
+
+      <div className="memory-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
+         <div className="glass-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>INDEXED REQUIREMENTS</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--accent-primary)' }}>12,482</div>
+         </div>
+         <div className="glass-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>PATTERN DENSITY</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--accent-secondary)' }}>High</div>
+         </div>
+         <div className="glass-card" style={{ padding: '16px' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>SEMANTIC NODES</div>
+            <div style={{ fontSize: '1.2rem', fontWeight: '700' }}>3.2k</div>
+         </div>
+      </div>
+
+      <div className="search-container-large glass-card" style={{ padding: "40px", textAlign: "center", background: 'radial-gradient(circle at top right, rgba(0, 243, 255, 0.05), transparent 300px)' }}>
+        <h2 style={{ fontSize: '1.5rem', marginBottom: '8px' }}>Deep Memory Search</h2>
+        <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Query technical architecture, business rules, and compliance patterns.</p>
+        <form onSubmit={handleSearch} style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+          <input 
+            type="text" 
+            placeholder="e.g., 'How do we handle multi-factor authentication for retail users?'" 
+            className="search-input-hero"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            style={{ width: "70%", padding: "16px", borderRadius: "12px", background: "rgba(0,0,0,0.3)", color: "#fff", border: "1px solid var(--glass-border)" }}
+          />
+          <button type="submit" className="btn-primary" disabled={loading} style={{ padding: '0 32px' }}>
+            {loading ? "🔍 ANALYZING..." : "QUERY BRAIN"}
+          </button>
+        </form>
+      </div>
+
+      {results && (
+        <div className="search-results-area glass-card" style={{ marginTop: "24px", padding: "32px", borderLeft: '4px solid var(--accent-primary)' }}>
+          <div style={{ marginBottom: '20px', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.6 }}>Intelligence Synthesis</div>
+          <article className="prose-dark">
+            <ReactMarkdown>{results}</ReactMarkdown>
+          </article>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const GovernanceDashboard = ({ documentId }) => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (documentId) {
+      fetch(`${API_BASE}/audit/logs/${documentId}`)
+        .then(r => r.json())
+        .then(data => {
+          setLogs(data.logs || []);
+          setLoading(false);
+        })
+        .catch(() => setLoading(false));
+    }
+  }, [documentId]);
+
+  return (
+    <div className="governance-dashboard glass-card" style={{ padding: "20px", marginTop: "24px" }}>
+      <h3 style={{ borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "12px", marginBottom: "20px" }}>
+        🛡️ Governance & Audit Trail
+      </h3>
+      {loading ? (
+        <p>Loading audit trail...</p>
+      ) : logs.length > 0 ? (
+        <div className="audit-timeline">
+          {logs.map((log, i) => (
+            <div key={i} className="audit-log-entry" style={{ marginBottom: "16px", paddingLeft: "12px", borderLeft: "2px solid #00f3ff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "rgba(255,255,255,0.5)" }}>
+                <strong>{log.agent_name}</strong>
+                <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+              </div>
+              <div style={{ fontWeight: "600", margin: "4px 0" }}>{log.action}</div>
+              <div style={{ fontSize: "0.9rem", opacity: 0.8 }}>{log.reasoning}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ color: "rgba(255,255,255,0.5)" }}>No audit logs found for this project session.</p>
+      )}
+    </div>
+  );
+};
+
+// Project View Export
+
 
 export default App;

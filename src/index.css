@@ -1,18 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  --primary-bg: #0B0F19;
-  --secondary-bg: #131B2B;
-  --accent-primary: #3B82F6;
-  --accent-secondary: #14B8A6;
+  --primary-bg: #06090F;
+  --secondary-bg: #0C111A;
+  --accent-primary: #00f3ff;
+  --accent-secondary: #7000ff;
   --vm-orange: #f26522;
   --vm-blue: #00aeef;
-  --glass-bg: rgba(255, 255, 255, 0.02);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --text-main: #e6edf3;
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-hover: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --text-main: #f0f6fc;
   --text-muted: #8b949e;
-  --success: #238636;
-  --error: #da3633;
+  --success: #2ea043;
+  --error: #f85149;
+  --warning: #d29922;
+  --radius-lg: 16px;
+  --radius-md: 12px;
 }
 
 * {
@@ -23,12 +27,12 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Outfit', 'Inter', sans-serif;
   background-color: var(--primary-bg);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  font-size: 14px; /* Reduced base font size */
+  font-size: 14px;
 }
 
 #root {
@@ -2156,4 +2160,81 @@ input:focus, select:focus, textarea:focus {
 
 .discovery-tile {
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.error-hint { color: var(--error); font-size: 0.8rem; padding: 10px; background: rgba(218, 54, 51, 0.1); border-radius: 8px; border: 1px solid rgba(218, 54, 51, 0.2); }
+
+
+/* --- Traceability Matrix --- */
+.traceability-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.traceability-table th { text-align: left; padding: 12px; background: rgba(255,255,255,0.05); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.traceability-table td { padding: 16px 12px; border-bottom: 1px solid var(--glass-border); vertical-align: top; font-size: 0.85rem; }
+.id-pill { background: var(--accent-primary); color: #000; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
+.linked-item { background: rgba(255,255,255,0.03); padding: 8px; border-radius: 6px; margin-bottom: 6px; border-left: 3px solid var(--accent-secondary); }
+.item-type { color: var(--accent-secondary); font-size: 0.65rem; font-weight: 700; margin-right: 8px; }
+.status-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; }
+.status-pill.mapped { background: rgba(35, 134, 54, 0.2); color: #3fb950; }
+.status-pill.risk { background: rgba(218, 54, 51, 0.2); color: #f85149; }
+.orphan-tag { color: var(--text-muted); font-style: italic; font-size: 0.8rem; }
+
+
+/* --- Council Badges --- */
+.badge-sm { padding: 4px 10px; border-radius: 4px; font-size: 0.65rem; font-weight: 600; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid var(--glass-border); text-transform: uppercase; letter-spacing: 0.05em; transition: all 0.3s ease; }
+.badge-sm.active { background: rgba(0, 243, 255, 0.1); color: var(--accent-primary); border-color: var(--accent-primary); box-shadow: 0 0 10px rgba(0, 243, 255, 0.2); }
+
+
+/* --- Enterprise Micro-interactions --- */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  display: inline-block;
+  margin-right: 8px;
+}
+
+.status-dot.pulse {
+  box-shadow: 0 0 0 rgba(0, 243, 255, 0.4);
+  animation: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 243, 255, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(0, 243, 255, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 243, 255, 0); }
+}
+
+.council-vitals {
+  background: rgba(0, 243, 255, 0.05) !important;
+  border-color: rgba(0, 243, 255, 0.2) !important;
+  font-size: 0.8rem;
+}
+
+.agent-status-mini {
+  transition: all 0.3s ease;
+}
+
+.agent-status-mini:hover {
+  background: rgba(255,255,255,0.05) !important;
+  transform: translateY(-2px);
+  border-color: var(--accent-primary) !important;
+}
+
+
+/* --- Agent Studio Animations --- */
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg) scale(1); opacity: 0.3; }
+  50% { transform: rotate(180deg) scale(1.1); opacity: 0.5; }
+  100% { transform: rotate(360deg) scale(1); opacity: 0.3; }
+}
+
+.agent-studio-ingest {
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 40px rgba(0,0,0,0.5);
+}
+
+.studio-dropzone:hover {
+  border-color: var(--accent-primary) !important;
+  background: rgba(255,255,255,0.02) !important;
+  transform: scale(1.01);
 }
