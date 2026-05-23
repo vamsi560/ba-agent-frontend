@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'; // Enterprise Discovery Platform v1.1
 import ReactMarkdown from 'react-markdown';
+import TelemetryDashboard from './components/TelemetryDashboard';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -361,6 +362,13 @@ function App() {
               <span className="nav-icon">🎨</span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
           </div>
+          
+          <div className="nav-group">
+            <div className="nav-label">Admin</div>
+            <div className={`nav-item ${currentView === 'telemetry' ? 'active' : ''}`} onClick={() => setCurrentView('telemetry')}>
+              <span className="nav-icon">🛡️</span> {!isSidebarCollapsed && "LLMOps Telemetry"}
+            </div>
+          </div>
         </nav>
 
         <div className="user-profile">
@@ -394,6 +402,10 @@ function App() {
 
         {currentView === 'capacity' && (
           <CapacityView />
+        )}
+
+        {currentView === 'telemetry' && (
+          <TelemetryDashboard />
         )}
 
         {currentView === 'releases' && (
