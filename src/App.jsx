@@ -779,7 +779,8 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
             { id: 'gaps', label: 'Gap Analysis', icon: '🔍' },
             { id: 'trd', label: 'Tech Spec', icon: '📝' },
             { id: 'flow', label: 'Process Flow', icon: '🎋' },
-            { id: 'backlog', label: 'Backlog', icon: '📂' }
+            { id: 'backlog', label: 'Backlog', icon: '📂' },
+            { id: 'deep_analysis', label: 'Deep Analysis (Debate)', icon: '⚖️' }
           ].map(module => (
             <label key={module.id} className={`module-chip ${selectedModules.includes(module.id) ? 'active' : ''}`}>
               <input 
