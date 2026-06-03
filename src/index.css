@@ -41,6 +41,16 @@ body {
   flex-direction: column;
 }
 
+/* --- Invisible Scrollbars --- */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent; /* Chrome/Safari/Webkit */
+}
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 10+ */
+}
+
 /* --- Login System --- */
 .login-screen {
   height: 100vh;
@@ -632,6 +642,67 @@ input:focus, select:focus, textarea:focus {
 }
 
 .discovery-tile:hover .tile-action { opacity: 1; }
+
+.module-selection-container {
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+}
+
+.module-header {
+  margin-bottom: 24px;
+}
+
+.module-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.2rem;
+  color: var(--accent-primary);
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.module-chip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.module-chip:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.module-chip.active {
+  background: rgba(0, 242, 255, 0.1);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
+}
+
+.module-chip .mod-icon {
+  font-size: 1.5rem;
+  filter: grayscale(1);
+  transition: all 0.3s;
+}
+
+.module-chip.active .mod-icon {
+  filter: grayscale(0);
+}
+
+.module-chip .mod-label {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
 
 /* --- Workflow View --- */
 /* --- Workflow Layout --- */

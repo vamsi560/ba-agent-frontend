@@ -543,16 +543,6 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
           <h1>Enterprise Dashboard</h1>
           <p>Real-time orchestration and institutional memory health.</p>
         </div>
-        <div className="header-actions">
-           <div className="council-vitals glass-card" style={{ padding: '8px 16px', display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div className="vital-item">
-                <span className="status-dot pulse"></span> Council Active
-              </div>
-              <div className="vital-item">
-                <span className="val" style={{ color: 'var(--accent-primary)', fontWeight: '600' }}>3.2k</span> Memory Points
-              </div>
-           </div>
-        </div>
       </header>
 
       <div className="stat-tiles">
@@ -587,26 +577,6 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
             <div className="tile-val">94%</div>
             <div className="tile-label" style={{ fontSize: '0.6rem', opacity: 0.6 }}>ADO Sync Success Rate</div>
           </div>
-        </div>
-      </div>
-
-      <div className="swarm-intelligence-area glass-card" style={{ marginTop: '24px', padding: '24px' }}>
-        <h3 style={{ fontSize: '0.8rem', letterSpacing: '0.1em', opacity: 0.6, marginBottom: '20px' }}>ACTIVE COUNCIL STATUS</h3>
-        <div className="council-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
-          {[
-            { name: '🛡️ SECURITY', status: 'Active', load: 'Minimal' },
-            { name: '🎨 UX/UI', status: 'Idle', load: 'N/A' },
-            { name: '🏗️ ARCHITECT', status: 'Active', load: 'Nominal' },
-            { name: '🧪 QA/TEST', status: 'Active', load: 'Nominal' }
-          ].map(agent => (
-            <div key={agent.name} className="agent-status-mini" style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)' }}>
-               <div style={{ fontSize: '0.7rem', fontWeight: '700', marginBottom: '8px' }}>{agent.name}</div>
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', color: agent.status === 'Active' ? 'var(--accent-primary)' : 'var(--text-muted)' }}>● {agent.status}</span>
-                  <span style={{ fontSize: '0.65rem', opacity: 0.5 }}>{agent.load}</span>
-               </div>
-            </div>
-          ))}
         </div>
       </div>
 
