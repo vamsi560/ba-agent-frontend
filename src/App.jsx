@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'; // Enterprise Discovery Platform v1.1
 import ReactMarkdown from 'react-markdown';
 import TelemetryDashboard from './components/TelemetryDashboard';
+import ChatWidget from './components/Chatbot/ChatWidget';
+import TestCaseAgentView from './components/Views/TestCaseAgentView';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -361,6 +363,9 @@ function App() {
             <div className={`nav-item ${currentView === 'flow_designer' ? 'active' : ''}`} onClick={() => setCurrentView('flow_designer')}>
               <span className="nav-icon">🎨</span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
+            <div className={`nav-item ${currentView === 'test_case_agent' ? 'active' : ''}`} onClick={() => setCurrentView('test_case_agent')}>
+              <span className="nav-icon">🧪</span> {!isSidebarCollapsed && "Test Case Agent"}
+            </div>
           </div>
           
           <div className="nav-group">
@@ -455,6 +460,10 @@ function App() {
           <KnowledgeVaultView />
         )}
 
+        {currentView === 'test_case_agent' && (
+          <TestCaseAgentView />
+        )}
+
         {currentView === 'workflow' && (
           <WorkflowView
             activeStep={activeStep}
@@ -467,6 +476,9 @@ function App() {
           />
         )}
       </main>
+      
+      {/* Omni-Channel Chat Assistant */}
+      <ChatWidget />
     </div>
   );
 }
