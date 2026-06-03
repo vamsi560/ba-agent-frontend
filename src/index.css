@@ -230,7 +230,7 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   padding: 20px; /* Reduced */
   transition: all 0.4s ease;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .brand {
