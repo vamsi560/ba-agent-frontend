@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import TelemetryDashboard from './components/TelemetryDashboard';
 import ChatWidget from './components/Chatbot/ChatWidget';
 import TestCaseAgentView from './components/Views/TestCaseAgentView';
+import DirectBacklogView from './components/Views/DirectBacklogView';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -363,6 +364,9 @@ function App() {
             }}>
               <span className="nav-icon">🚀</span> {!isSidebarCollapsed && "Discovery Swarm"}
             </div>
+            <div className={`nav-item ${currentView === 'quick_backlog' ? 'active' : ''}`} onClick={() => setCurrentView('quick_backlog')}>
+              <span className="nav-icon">⚡</span> {!isSidebarCollapsed && "Quick Backlog"}
+            </div>
             <div className={`nav-item ${currentView === 'work_items' ? 'active' : ''}`} onClick={() => setCurrentView('work_items')}>
               <span className="nav-icon">📋</span> {!isSidebarCollapsed && "Backlog Explorer"}
             </div>
@@ -430,6 +434,10 @@ function App() {
 
         {currentView === 'telemetry' && (
           <TelemetryDashboard />
+        )}
+
+        {currentView === 'quick_backlog' && (
+          <DirectBacklogView />
         )}
 
         {currentView === 'releases' && (
