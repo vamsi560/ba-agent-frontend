@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { ShieldAlert, Activity, DollarSign, Database } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://127.0.0.1:8000'
+    : 'https://ba-agent-aqd8c3d8dtdrbcat.centralus-01.azurewebsites.net'
+);
+
 const TelemetryDashboard = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,7 +19,7 @@ const TelemetryDashboard = () => {
 
     const fetchTelemetry = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:5000/api/telemetry');
+        const response = await fetch(`${API_BASE}/api/telemetry`);
         const result = await response.json();
         
         // Transform data for charts

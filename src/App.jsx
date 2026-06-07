@@ -48,8 +48,8 @@ function App() {
   });
 
   useEffect(() => {
-    if (isLoggedIn) fetchDashboardData();
-  }, [isLoggedIn, dashboardFilter]);
+    if (isLoggedIn && currentView === 'dashboard') fetchDashboardData();
+  }, [isLoggedIn, dashboardFilter, currentView]);
 
   const fetchDashboardData = async () => {
     try {
@@ -95,39 +95,58 @@ function App() {
 
       // 2. GAP ANALYSIS (Modular)
       setActiveStep(2);
-      const analyzeRes = await fetch(`${API_BASE}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          document_id: ingestData.document_id,
-          enabled_modules: selectedModules 
-        }),
-      });
-      const anaData = await analyzeRes.json();
+      let anaData = {};
+      let questions = [];
+      try {
+        const analyzeRes = await fetch(`${API_BASE}/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            document_id: ingestData.document_id,
+            enabled_modules: selectedModules 
+          }),
+        });
+        
+        if (!analyzeRes.ok) throw new Error("Network response was not ok");
+        anaData = await analyzeRes.json();
 
-      if (!anaData.results) {
-        throw new Error(anaData.detail || "Analysis failed to return structured results.");
+        if (!anaData.results) {
+          throw new Error(anaData.detail || "Analysis failed to return structured results.");
+        }
+
+        questions = anaData.results.clarification_questions || [];
+        
+        // Inject Ambiguities from Phase 1
+        if (ingestData.ambiguity_report && ingestData.ambiguity_report.ambiguities) {
+           const ambQuestions = ingestData.ambiguity_report.ambiguities.map(a => 
+               `[AMBIGUITY: "${a.requirement.substring(0, 50)}..."] ${a.issue} -> ${a.clarification_question}`
+           );
+           questions = [...ambQuestions, ...questions];
+        }
+
+        setWorkflowData(prev => ({
+          ...prev,
+          analysisId: anaData.analysis_id,
+          gaps: anaData.results.gaps,
+          reviews: anaData.results.reviews,
+          diagram: anaData.results.diagram,
+          clarifications: questions,
+          docId: ingestData.document_id
+        }));
+      } catch (gapError) {
+        console.warn("Gap Analysis failed or timed out. Degrading gracefully.", gapError);
+        // Provide empty fallback data so TRD can still run on the raw extraction
+        anaData = { analysis_id: ingestData.document_id, results: { gaps: [], reviews: {}, diagram: "" } };
+        setWorkflowData(prev => ({
+          ...prev,
+          analysisId: ingestData.document_id,
+          gaps: [],
+          reviews: null,
+          diagram: null,
+          clarifications: [],
+          docId: ingestData.document_id
+        }));
       }
-
-      let questions = anaData.results.clarification_questions || [];
-      
-      // Inject Ambiguities from Phase 1
-      if (ingestData.ambiguity_report && ingestData.ambiguity_report.ambiguities) {
-         const ambQuestions = ingestData.ambiguity_report.ambiguities.map(a => 
-             `[AMBIGUITY: "${a.requirement.substring(0, 50)}..."] ${a.issue} -> ${a.clarification_question}`
-         );
-         questions = [...ambQuestions, ...questions];
-      }
-
-      setWorkflowData(prev => ({
-        ...prev,
-        analysisId: anaData.analysis_id,
-        gaps: anaData.results.gaps,
-        reviews: anaData.results.reviews,
-        diagram: anaData.results.diagram,
-        clarifications: questions,
-        docId: ingestData.document_id
-      }));
 
       // Intervention: If AI has questions, stop and ask the BA
       if (questions.length > 0) {
