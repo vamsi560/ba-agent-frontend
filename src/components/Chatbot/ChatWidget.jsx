@@ -29,8 +29,12 @@ const ChatWidget = () => {
         setIsLoading(true);
 
         try {
-            // Using the global VITE_API_BASE_URL if it exists, otherwise default to relative path
-            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+            // Using the dynamic fallback logic matching App.jsx
+            const baseUrl = import.meta.env.VITE_API_BASE_URL || (
+              window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                ? 'http://127.0.0.1:8000'
+                : 'https://ba-agent-aqd8c3d8dtdrbcat.centralus-01.azurewebsites.net'
+            );
             
             // Note: ADO tokens should ideally be set in backend env, but for marketplace context 
             // we could pass them if they were in localStorage. The router agent just routes.
