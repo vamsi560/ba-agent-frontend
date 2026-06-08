@@ -56,10 +56,27 @@ const DirectBacklogView = () => {
             </div>
 
             {!result && !loading && (
-                <div className="glass-panel upload-zone-large" style={{ marginTop: '2rem', textAlign: 'center', padding: '4rem 2rem' }}>
-                    <UploadCloud size={64} style={{ color: 'var(--primary)', marginBottom: '1rem' }} />
-                    <h3>Drag & Drop your BRD here</h3>
-                    <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>Supports PDF, DOCX, TXT</p>
+                <div 
+                    className="glass-panel upload-zone-large slide-up" 
+                    style={{ 
+                        marginTop: '3rem', 
+                        textAlign: 'center', 
+                        padding: '5rem 3rem',
+                        background: 'linear-gradient(145deg, rgba(15,23,42,0.6) 0%, rgba(30,41,59,0.4) 100%)',
+                        border: '1px solid rgba(56, 189, 248, 0.2)',
+                        boxShadow: '0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+                        borderRadius: '24px',
+                        position: 'relative',
+                        overflow: 'hidden'
+                    }}
+                >
+                    {/* Glowing background orb */}
+                    <div style={{ position: 'absolute', top: '-50%', left: '50%', transform: 'translateX(-50%)', width: '300px', height: '300px', background: 'radial-gradient(circle, rgba(56,189,248,0.15) 0%, rgba(0,0,0,0) 70%)', zIndex: 0, pointerEvents: 'none' }}></div>
+                    
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                        <UploadCloud size={72} style={{ color: 'var(--primary)', marginBottom: '1.5rem', filter: 'drop-shadow(0 0 12px rgba(56,189,248,0.5))' }} />
+                        <h3 style={{ fontSize: '1.8rem', fontWeight: '600', marginBottom: '0.5rem', background: 'linear-gradient(to right, #fff, #a5d6ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Drag & Drop your BRD here</h3>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '2.5rem', fontSize: '1.1rem' }}>Supports PDF, DOCX, TXT</p>
                     
                     <input 
                         type="file" 
@@ -90,10 +107,10 @@ const DirectBacklogView = () => {
             )}
 
             {loading && (
-                <div className="loading-state glass-panel" style={{ marginTop: '2rem', padding: '4rem', textAlign: 'center' }}>
-                    <Loader2 className="spinner" size={48} style={{ color: 'var(--primary)', margin: '0 auto 1.5rem' }} />
-                    <h3>Analyzing Requirements & Architecting Backlog...</h3>
-                    <p style={{ color: 'var(--text-secondary)' }}>This bypasses the deep gap analysis for maximum speed.</p>
+                <div className="loading-state glass-panel pulse" style={{ marginTop: '3rem', padding: '5rem', textAlign: 'center', borderRadius: '24px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                    <Loader2 className="spinner" size={64} style={{ color: 'var(--primary)', margin: '0 auto 2rem', filter: 'drop-shadow(0 0 10px rgba(56,189,248,0.8))' }} />
+                    <h3 style={{ fontSize: '1.5rem', color: '#fff', marginBottom: '0.5rem' }}>Analyzing Requirements & Architecting Backlog...</h3>
+                    <p style={{ color: 'var(--primary)', opacity: 0.8 }}>Bypassing deep analysis phase for maximum velocity.</p>
                 </div>
             )}
 
