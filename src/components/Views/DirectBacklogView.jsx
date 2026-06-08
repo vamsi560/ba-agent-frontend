@@ -85,24 +85,30 @@ const DirectBacklogView = () => {
                         onChange={handleFileUpload} 
                         accept=".pdf,.txt,.docx"
                     />
-                    <label htmlFor="direct-file-upload" className="primary-button" style={{ display: 'inline-flex', cursor: 'pointer' }}>
+                    <label htmlFor="direct-file-upload" className="btn-primary" style={{ display: 'inline-flex', cursor: 'pointer' }}>
                         Browse Files
                     </label>
 
                     {file && (
-                        <div style={{ marginTop: '2rem' }}>
-                            <div className="file-pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(56, 189, 248, 0.1)', padding: '0.5rem 1rem', borderRadius: '50px', color: 'var(--primary)' }}>
-                                <FileText size={16} />
-                                {file.name}
-                                <CheckCircle size={16} />
+                        <div className="slide-up" style={{ marginTop: '3rem', padding: '2rem', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                <div style={{ background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', padding: '1rem', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <FileText size={24} color="#000" />
+                                </div>
+                                <div style={{ textAlign: 'left' }}>
+                                    <h4 style={{ fontSize: '1.2rem', margin: 0, fontWeight: '600' }}>{file.name}</h4>
+                                    <p style={{ margin: 0, color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                                        <CheckCircle size={14} /> Ready for Architecture
+                                    </p>
+                                </div>
                             </div>
-                            <div style={{ marginTop: '1.5rem' }}>
-                                <button className="primary-button" onClick={handleGenerate}>
-                                    Generate Backlog & Tests
-                                </button>
-                            </div>
+                            <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
+                            <button className="btn-primary" onClick={handleGenerate} style={{ padding: '0.8rem 2rem', fontSize: '1.1rem', borderRadius: '50px' }}>
+                                ✨ Generate Backlog & Tests
+                            </button>
                         </div>
                     )}
+                    </div>
                 </div>
             )}
 
@@ -159,10 +165,10 @@ const DirectBacklogView = () => {
                     </div>
 
                     <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem' }}>
-                        <button className="secondary-button" onClick={() => { setResult(null); setFile(null); }}>
+                        <button className="btn-secondary" onClick={() => { setResult(null); setFile(null); }}>
                             Start Over
                         </button>
-                        <button className="primary-button" onClick={() => alert("Publish to ADO feature is coming soon!")}>
+                        <button className="btn-primary" onClick={() => alert("Publish to ADO feature is coming soon!")}>
                             Publish to Azure DevOps
                         </button>
                     </div>
