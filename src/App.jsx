@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'; // Enterprise Discovery Platform v1.1
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import TelemetryDashboard from './components/TelemetryDashboard';
 import ChatWidget from './components/Chatbot/ChatWidget';
 import TestCaseAgentView from './components/Views/TestCaseAgentView';
 import DirectBacklogView from './components/Views/DirectBacklogView';
+import SprintExcelView from './components/Views/SprintExcelView';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -22,7 +24,8 @@ function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [completedSteps, setCompletedSteps] = useState([]);
   const [selectedLOB, setSelectedLOB] = useState('Personal Auto');
-  const [selectedModules, setSelectedModules] = useState(['gaps', 'trd', 'flow', 'backlog']);
+  const [selectedModules, setSelectedModules] = useState(['gaps', 'functional_spec', 'flow', 'backlog']);
+  const [techContext, setTechContext] = useState("");
 
   const toggleModule = (id) => {
     setSelectedModules(prev => 
@@ -42,7 +45,7 @@ function App() {
   const [workflowData, setWorkflowData] = useState({
     extraction: null,
     gaps: null,
-    trd: null,
+    functional_spec: null,
     backlog: null,
     reviews: null,
     diagram: null
@@ -119,9 +122,10 @@ function App() {
         
         // Inject Ambiguities from Phase 1
         if (ingestData.ambiguity_report && ingestData.ambiguity_report.ambiguities) {
-           const ambQuestions = ingestData.ambiguity_report.ambiguities.map(a => 
-               `[AMBIGUITY: "${a.requirement.substring(0, 50)}..."] ${a.issue} -> ${a.clarification_question}`
-           );
+           const ambQuestions = ingestData.ambiguity_report.ambiguities.map(a => ({
+               context: `[AMBIGUITY] ${a.requirement.substring(0, 50)}...`,
+               question: `${a.issue} -> ${a.clarification_question}`
+           }));
            questions = [...ambQuestions, ...questions];
         }
 
@@ -136,7 +140,7 @@ function App() {
         }));
       } catch (gapError) {
         console.warn("Gap Analysis failed or timed out. Degrading gracefully.", gapError);
-        // Provide empty fallback data so TRD can still run on the raw extraction
+        // Provide empty fallback data so Functional Spec can still run on the raw extraction
         anaData = { analysis_id: ingestData.document_id, results: { gaps: [], reviews: {}, diagram: "" } };
         setWorkflowData(prev => ({
           ...prev,
@@ -159,18 +163,18 @@ function App() {
 
       setCompletedSteps(prev => [...prev, 2]);
 
-      // 3. TRD GENERATION (Conditional)
-      let trdData = null;
-      if (selectedModules.includes('trd')) {
+      // 3. FUNCTIONAL SPEC GENERATION (Conditional)
+      let specData = null;
+      if (selectedModules.includes('functional_spec')) {
         setActiveStep(3);
-        const trdRes = await fetch(`${API_BASE}/generate-trd`, {
+        const specRes = await fetch(`${API_BASE}/generate-functional-spec`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ analysis_id: anaData.analysis_id }),
+          body: JSON.stringify({ analysis_id: anaData.analysis_id, tech_context: techContext }),
         });
-        const trdResult = await trdRes.json();
-        trdData = trdResult.trd;
-        setWorkflowData(prev => ({ ...prev, trd: trdData }));
+        const specResult = await specRes.json();
+        specData = specResult.functional_spec;
+        setWorkflowData(prev => ({ ...prev, functional_spec: specData }));
         setCompletedSteps(prev => [...prev, 3]);
       }
 
@@ -181,12 +185,13 @@ function App() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            trd: trdData,
-            analysis_id: anaData.analysis_id 
+            functional_spec: specData,
+            analysis_id: anaData.analysis_id,
+            document_id: ingestData.document_id
           }),
         });
         const backData = await backlogRes.json();
-        setWorkflowData(prev => ({ ...prev, backlog: backData }));
+        setWorkflowData(prev => ({ ...prev, backlog: backData.backlog, critic_review: backData.critic_review }));
         setCompletedSteps(prev => [...prev, 4]);
       }
 
@@ -220,15 +225,15 @@ function App() {
       }));
 
       // Now proceed to 3 and 4
-      // 3. TRD GENERATION
+      // 3. FUNCTIONAL SPEC GENERATION
       setActiveStep(3);
-      const trdRes = await fetch(`${API_BASE}/generate-trd`, {
+      const specRes = await fetch(`${API_BASE}/generate-functional-spec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ analysis_id: anaData.analysis_id }),
+        body: JSON.stringify({ analysis_id: anaData.analysis_id, tech_context: techContext }),
       });
-      const trdResult = await trdRes.json();
-      setWorkflowData(prev => ({ ...prev, trd: trdResult.trd }));
+      const specResult = await specRes.json();
+      setWorkflowData(prev => ({ ...prev, functional_spec: specResult.functional_spec }));
       setCompletedSteps(prev => [...prev, 3]);
 
       // 4. BACKLOG GENERATION
@@ -236,10 +241,14 @@ function App() {
       const backlogRes = await fetch(`${API_BASE}/generate-backlog`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trd: trdResult.trd }),
+        body: JSON.stringify({ 
+          functional_spec: specResult.functional_spec,
+          analysis_id: anaData.analysis_id,
+          document_id: docId
+        }),
       });
       const backData = await backlogRes.json();
-      setWorkflowData(prev => ({ ...prev, backlog: backData }));
+      setWorkflowData(prev => ({ ...prev, backlog: backData.backlog, critic_review: backData.critic_review }));
       setCompletedSteps(prev => [...prev, 4]);
 
       setActiveStep(5);
@@ -262,7 +271,7 @@ function App() {
         analysisId: data.id,
         extraction: data.results.extraction || {},
         gaps: data.results.gaps || [],
-        trd: data.original_text || data.results.trd || "",
+        functional_spec: data.original_text || data.results.functional_spec || "",
         backlog: data.results.backlog || data.results.backlog_items || null,
         reviews: data.results.reviews || null,
         diagram: data.results.diagram || null,
@@ -321,7 +330,7 @@ function App() {
       const result = await response.json();
       if (result.error) throw new Error(result.error);
 
-      alert("📧 Approval Request Dispatched! The stakeholder has been notified with the TRD and backlog for final authorization.");
+      alert("📧 Approval Request Dispatched! The stakeholder has been notified with the Functional Spec and backlog for final authorization.");
       // REMOVED: setCurrentView('dashboard'); -> Stay in session until manually closed
     } catch (err) {
       alert(`Approval Request Error: ${err.message}`);
@@ -360,7 +369,7 @@ function App() {
             <div className="nav-label">Delivery OS</div>
             <div className={`nav-item ${currentView === 'new_analysis' ? 'active' : ''}`} onClick={() => {
               setCurrentView('new_analysis');
-              setSelectedModules(['gaps', 'trd', 'flow', 'backlog']);
+              setSelectedModules(['gaps', 'functional_spec', 'flow', 'backlog']);
             }}>
               <span className="nav-icon">🚀</span> {!isSidebarCollapsed && "Discovery Swarm"}
             </div>
@@ -381,13 +390,16 @@ function App() {
               <span className="nav-icon">🔍</span> {!isSidebarCollapsed && "Gap Detective"}
             </div>
             <div className={`nav-item ${currentView === 'spec_architect' ? 'active' : ''}`} onClick={() => setCurrentView('spec_architect')}>
-              <span className="nav-icon">🏗️</span> {!isSidebarCollapsed && "Spec Architect"}
+              <span className="nav-icon">🏗️</span> {!isSidebarCollapsed && "Functional Architect"}
             </div>
             <div className={`nav-item ${currentView === 'flow_designer' ? 'active' : ''}`} onClick={() => setCurrentView('flow_designer')}>
               <span className="nav-icon">🎨</span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
             <div className={`nav-item ${currentView === 'test_case_agent' ? 'active' : ''}`} onClick={() => setCurrentView('test_case_agent')}>
               <span className="nav-icon">🧪</span> {!isSidebarCollapsed && "Test Case Agent"}
+            </div>
+            <div className={`nav-item ${currentView === 'sprint_excel' ? 'active' : ''}`} onClick={() => setCurrentView('sprint_excel')}>
+              <span className="nav-icon">📅</span> {!isSidebarCollapsed && "Sprint Excel Sync"}
             </div>
           </div>
           
@@ -440,6 +452,10 @@ function App() {
           <DirectBacklogView />
         )}
 
+        {currentView === 'sprint_excel' && (
+          <SprintExcelView />
+        )}
+
         {currentView === 'releases' && (
           <ReleaseView data={workflowData.backlog} />
         )}
@@ -459,6 +475,8 @@ function App() {
             setSelectedLOB={setSelectedLOB}
             selectedModules={selectedModules}
             onToggleModule={toggleModule}
+            techContext={techContext}
+            setTechContext={setTechContext}
           />
         )}
 
@@ -690,7 +708,7 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
 );
 };
 
-const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules, onToggleModule }) => {
+const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules, onToggleModule, techContext, setTechContext }) => {
   const [ingestMode, setIngestMode] = useState('file'); // file, text, visual, meeting
   const [inputText, setInputText] = useState("");
 
@@ -796,6 +814,17 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
         </div>
       </div>
       
+      <div className="tech-context-container animation-fade-in" style={{ maxWidth: '800px', margin: '24px auto' }}>
+        <label>Optional: Target Tech Stack / Integration Context</label>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>If provided, the agent will generate Draft Architect Handoff Notes at the end of the Functional Spec.</p>
+        <textarea 
+          placeholder="e.g., Azure Serverless, React frontend, integrating with Guidewire PolicyCenter via REST API..."
+          value={techContext}
+          onChange={(e) => setTechContext(e.target.value)}
+          style={{ width: '100%', height: '80px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: '#fff', padding: '12px' }}
+        />
+      </div>
+      
       <div className="module-selection-container glass-card animation-fade-in" style={{ maxWidth: '800px', margin: '24px auto' }}>
         <div className="module-header">
           <h3>Toolkit Configuration</h3>
@@ -804,7 +833,7 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
         <div className="module-grid">
           {[
             { id: 'gaps', label: 'Gap Analysis', icon: '🔍' },
-            { id: 'trd', label: 'Tech Spec', icon: '📝' },
+            { id: 'functional_spec', label: 'Functional Spec', icon: '📝' },
             { id: 'flow', label: 'Process Flow', icon: '🎋' },
             { id: 'backlog', label: 'Backlog', icon: '📂' },
             { id: 'deep_analysis', label: 'Deep Analysis (Debate)', icon: '⚖️' }
@@ -827,14 +856,15 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
 };
 
 const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isSyncing, onToggle }) => {
-  const [activeReviewTab, setActiveReviewTab] = useState('trd'); // 'trd', 'backlog', 'flow'
+  const [activeReviewTab, setActiveReviewTab] = useState('functional_spec'); // 'functional_spec', 'backlog', 'flow'
   const [showAllReqs, setShowAllReqs] = useState(false);
+  const [showAllGaps, setShowAllGaps] = useState(false);
 
   const STEPS = [
 
     { title: 'Extraction', icon: '🔍', key: 'extraction' },
     { title: 'Gap Analysis', icon: '🧠', key: 'gaps' },
-    { title: 'Technical Spec', icon: '📝', key: 'trd' },
+    { title: 'Functional Spec', icon: '📝', key: 'functional_spec' },
     { title: 'Backlog Mapping', icon: '🧩', key: 'backlog' },
   ];
 
@@ -863,6 +893,7 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
         );
       case 'gaps':
         const reviews = data.reviews || {};
+        const gapsToShow = showAllGaps ? stepData.gaps : stepData.gaps?.slice(0, 3);
         return (
           <div className="step-result-card glass-card">
             <h4>{step.icon} Risk & Agentic Council Review</h4>
@@ -872,21 +903,44 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                <span className={`badge-sm ${reviews.Architecture ? 'active' : ''}`}>🏗️ Arch</span>
                <span className={`badge-sm ${reviews.QA ? 'active' : ''}`}>🧪 QA</span>
             </div>
-            <div className="gap-list">
-              {stepData.gaps?.slice(0, 3).map((gap, i) => (
-                <div key={i} className="gap-item">⚠️ {gap.title || gap.requirement || gap}</div>
+            <div className="gap-list" style={{ maxHeight: showAllGaps ? '400px' : 'auto', overflowY: 'auto' }}>
+              {gapsToShow?.map((gap, i) => (
+                <div key={i} className="gap-item glass-card" style={{ marginBottom: '8px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                    <div style={{ fontWeight: 'bold', color: '#fca5a5' }}>⚠️ {gap.title || gap.requirement || gap}</div>
+                    {(gap.description || gap.recommendation) && (
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                            {gap.description && <p style={{ margin: '0 0 4px 0' }}>{gap.description}</p>}
+                            {gap.recommendation && <p style={{ margin: '0', color: 'var(--accent-primary)' }}><strong>Fix:</strong> {gap.recommendation}</p>}
+                        </div>
+                    )}
+                </div>
               ))}
-              {stepData.risks?.length > 0 && (
-                <div className="risk-tag">+{stepData.risks.length} Risks Identified</div>
+              {!showAllGaps && stepData.gaps?.length > 3 && (
+                <div 
+                    className="risk-tag" 
+                    style={{ cursor: 'pointer', textAlign: 'center', marginTop: '8px', display: 'block', padding: '8px' }}
+                    onClick={() => setShowAllGaps(true)}
+                >
+                    + {stepData.gaps.length - 3} more Gaps (Click to Expand)
+                </div>
+              )}
+              {showAllGaps && (
+                <div 
+                    className="risk-tag" 
+                    style={{ cursor: 'pointer', textAlign: 'center', marginTop: '8px', display: 'block', padding: '8px', background: 'rgba(255,255,255,0.1)', color: '#fff' }}
+                    onClick={() => setShowAllGaps(false)}
+                >
+                    Collapse Gaps
+                </div>
               )}
             </div>
           </div>
         );
-      case 'trd':
+      case 'functional_spec':
         return (
           <div className="step-result-card glass-card">
-            <h4>{step.icon} Technical Specification</h4>
-            <div className="trd-preview">
+            <h4>{step.icon} Functional Specification</h4>
+            <div className="functional_spec-preview">
               {stepData.split('\n').slice(0, 10).join('\n')}...
             </div>
           </div>
@@ -991,14 +1045,14 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
               <div className="review-header">
                 <h2>Final Project Orchestration</h2>
                 <div className="review-actions">
-                  <button className="btn-secondary" onClick={() => window.open(`${API_BASE}/download-trd/${data.docId}`, '_blank')}>Export PDF</button>
+                  <button className="btn-secondary" onClick={() => window.open(`${API_BASE}/download-spec/${data.docId}`, '_blank')}>Export PDF</button>
                   <button className="btn-primary" onClick={onFinish}>Approve & Sync to ADO</button>
                 </div>
               </div>
 
               <div className="review-tabs">
                 <div className="tab-switcher">
-                  <button className={`btn-tab ${activeReviewTab === 'trd' ? 'active' : ''}`} onClick={() => setActiveReviewTab('trd')}>Technical Spec</button>
+                  <button className={`btn-tab ${activeReviewTab === 'functional_spec' ? 'active' : ''}`} onClick={() => setActiveReviewTab('functional_spec')}>Functional Spec</button>
                   <button className={`btn-tab ${activeReviewTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveReviewTab('reviews')}>Persona Reviews</button>
                   <button className={`btn-tab ${activeReviewTab === 'backlog' ? 'active' : ''}`} onClick={() => setActiveReviewTab('backlog')}>Backlog Tree</button>
                   <button className={`btn-tab ${activeReviewTab === 'traceability' ? 'active' : ''}`} onClick={() => setActiveReviewTab('traceability')}>Traceability Matrix</button>
@@ -1008,15 +1062,15 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
               </div>
 
               <div className="review-content">
-                {activeReviewTab === 'trd' && (
-                  <div className="panel trd-panel full-width animation-fade-in">
+                {activeReviewTab === 'functional_spec' && (
+                  <div className="panel spec-panel full-width animation-fade-in">
                     <div className="doc-page">
                       <header className="doc-header">
                         <img src="/assets/ValueMomentumlogodark.png" height="30" alt="logo" />
                         <div className="doc-meta">Technical Requirements Document v1.0</div>
                       </header>
                       <article className="doc-content">
-                        <ReactMarkdown>{data.trd}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.functional_spec}</ReactMarkdown>
                       </article>
                     </div>
                   </div>
@@ -1219,43 +1273,56 @@ const PersonaReviews = ({ reviews }) => {
 
   return (
     <div className="persona-reviews-grid">
-      {Object.entries(reviews).map(([key, review]) => (
-        <div key={key} className={`persona-card glass-card ${key}`}>
-          <div className="persona-header">
-            <span className="persona-icon">
-              {key === 'qa' ? '🧪' : key === 'security' ? '🛡️' : '🎨'}
-            </span>
-            <h4>{key.toUpperCase()} Auditor Review</h4>
+      {Object.entries(reviews).map(([key, reviewData]) => {
+        const lowerKey = key.toLowerCase();
+        let items = [];
+        if (lowerKey === 'qa') items = reviewData?.qa_review || [];
+        if (lowerKey === 'security') items = reviewData?.security_review || [];
+        if (lowerKey === 'ux') items = reviewData?.ux_review || [];
+        
+        return (
+          <div key={key} className={`persona-card glass-card ${lowerKey}`}>
+            <div className="persona-header">
+              <span className="persona-icon">
+                {lowerKey === 'qa' ? '🧪' : lowerKey === 'security' ? '🛡️' : '🎨'}
+              </span>
+              <h4>{key.toUpperCase()} Auditor Review</h4>
+            </div>
+            <div className="persona-content">
+              {items.map((review, idx) => (
+                <div key={idx} style={{marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.1)'}}>
+                  {lowerKey === 'qa' && (
+                    <div className="review-item">
+                      <div className="review-meta">Score: {review.testability_score}/10</div>
+                      <div className="review-edge">Edge Cases: {review.edge_cases?.join(', ')}</div>
+                      <p className="review-tip">💡 {review.suggestions || review.test_strategy}</p>
+                    </div>
+                  )}
+                  {lowerKey === 'security' && (
+                    <div className="review-item">
+                      <div className={`risk-badge ${review.risk_level?.toLowerCase()}`}>{review.risk_level} Risk</div>
+                      <ul className="concerns-list">
+                        {review.concerns?.map((c, i) => <li key={i}>{c}</li>)}
+                      </ul>
+                      <p className="mitigation-text">🛡️ {review.mitigation || review.mitigation_recommendation}</p>
+                    </div>
+                  )}
+                  {lowerKey === 'ux' && (
+                    <div className="review-item">
+                      <div className="friction-title">Potential Friction:</div>
+                      <ul className="friction-list">
+                        {review.journey_gaps?.map((f, i) => <li key={i}>{f}</li>) || review.friction_points?.map((f, i) => <li key={i}>{f}</li>)}
+                      </ul>
+                      <p className="improvement-text">🎨 {review.improvement || review.improvement_suggestion}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {items.length === 0 && <div className="no-data" style={{opacity: 0.5}}>No feedback.</div>}
+            </div>
           </div>
-          <div className="persona-content">
-            {key === 'qa' && (
-              <div className="review-item">
-                <div className="review-meta">Score: {review.testability_score}/10</div>
-                <div className="review-edge">Edge Cases: {review.edge_cases?.join(', ')}</div>
-                <p className="review-tip">💡 {review.suggestions}</p>
-              </div>
-            )}
-            {key === 'security' && (
-              <div className="review-item">
-                <div className={`risk-badge ${review.risk_level?.toLowerCase()}`}>{review.risk_level} Risk</div>
-                <ul className="concerns-list">
-                  {review.concerns?.map((c, i) => <li key={i}>{c}</li>)}
-                </ul>
-                <p className="mitigation-text">🛡️ {review.mitigation}</p>
-              </div>
-            )}
-            {key === 'ux' && (
-              <div className="review-item">
-                <div className="friction-title">Potential Friction:</div>
-                <ul className="friction-list">
-                  {review.friction_points?.map((f, i) => <li key={i}>{f}</li>)}
-                </ul>
-                <p className="improvement-text">🎨 {review.improvement}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 };
@@ -1444,7 +1511,7 @@ const TraceabilityMatrix = ({ backlog }) => {
         <table className="modern-table compact">
           <thead>
             <tr>
-              <th>Source Requirement (TRD)</th>
+              <th>Source Requirement (Functional Spec)</th>
               <th>Story Title</th>
               <th>Governance Priority</th>
               <th>ADO Sync Status</th>
@@ -1953,10 +2020,10 @@ const GapDetectiveView = () => {
 
 const SpecArchitectView = () => {
   const [loading, setLoading] = useState(false);
-  const [trd, setTrd] = useState("");
+  const [functional_spec, setFunctionalSpec] = useState("");
   const [criticReview, setCriticReview] = useState(null);
 
-  const handleGenerateTRD = async (file) => {
+  const handleGenerateFunctionalSpec = async (file) => {
     setLoading(true);
     try {
       const formData = new FormData();
@@ -1978,22 +2045,22 @@ const SpecArchitectView = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           document_id: ingestData.document_id,
-          enabled_modules: ['trd'] 
+          enabled_modules: ['functional_spec'] 
         }),
       });
       const anaData = await analyzeRes.json();
 
-      // Step 3: High-Fidelity TRD Generation
-      const trdRes = await fetch(`${API_BASE}/generate-trd`, {
+      // Step 3: High-Fidelity Functional Spec Generation
+      const specRes = await fetch(`${API_BASE}/generate-functional-spec`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ analysis_id: anaData.analysis_id }),
       });
-      const trdResult = await trdRes.json();
-      setTrd(trdResult.trd);
-      setCriticReview(trdResult.critic_review);
+      const specResult = await specRes.json();
+      setFunctionalSpec(specResult.functional_spec);
+      setCriticReview(specResult.critic_review);
     } catch (e) {
-      alert("TRD Generation Error: " + e.message);
+      alert("Functional Spec Generation Error: " + e.message);
     } finally {
       setLoading(false);
     }
@@ -2013,23 +2080,23 @@ const SpecArchitectView = () => {
       <header className="view-header">
         <div className="title-area">
           <span className="pre-title">Engineering Agent</span>
-          <h1>Spec Architect</h1>
-          <p>Generate high-fidelity Technical Requirements Documents (TRD) instantly.</p>
+          <h1>Functional Architect</h1>
+          <p>Generate high-fidelity Technical Requirements Documents (Functional Spec) instantly.</p>
         </div>
       </header>
 
-      {!trd ? (
+      {!functional_spec ? (
         <div className="agent-studio-ingest glass-card" style={{ maxWidth: '900px', margin: '40px auto', padding: '60px', textAlign: 'center', position: 'relative', overflow: 'hidden', background: 'repeating-linear-gradient(0deg, transparent, transparent 19px, rgba(0, 243, 255, 0.03) 20px), repeating-linear-gradient(90deg, transparent, transparent 19px, rgba(0, 243, 255, 0.03) 20px)' }}>
           <div className="studio-header" style={{ marginBottom: '40px' }}>
              <span className="badge-sm active" style={{ marginBottom: '16px', display: 'inline-block', background: 'rgba(0, 243, 255, 0.1)', color: 'var(--accent-primary)' }}>BLUEPRINT ENGINE ACTIVE</span>
-             <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '12px' }}>Spec Architect Studio</h2>
-             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Convert business requirements into engineering-ready Technical Specifications.</p>
+             <h2 style={{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '12px' }}>Functional Architect Studio</h2>
+             <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>Convert business requirements into engineering-ready Functional Specifications.</p>
           </div>
 
-          <div className="studio-dropzone glass-card" onClick={() => document.getElementById('trd-up-tool').click()} style={{ border: '2px dashed var(--accent-primary)', padding: '40px', cursor: 'pointer', background: 'rgba(0,0,0,0.3)' }}>
+          <div className="studio-dropzone glass-card" onClick={() => document.getElementById('functional_spec-up-tool').click()} style={{ border: '2px dashed var(--accent-primary)', padding: '40px', cursor: 'pointer', background: 'rgba(0,0,0,0.3)' }}>
              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🏗️</div>
              <h4 style={{ marginBottom: '8px' }}>Ingest Material for Architecture</h4>
-             <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Our agents will draft a complete TRD based on your source input.</p>
+             <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>Our agents will draft a complete Functional Spec based on your source input.</p>
              <button className="btn-primary" style={{ marginTop: '24px', padding: '12px 32px' }}>LAUNCH ARCHITECT</button>
           </div>
           
@@ -2038,18 +2105,18 @@ const SpecArchitectView = () => {
              <span>✓ Architecture Recommendations</span>
              <span>✓ Export-Ready Markdown</span>
           </div>
-          <input type="file" id="trd-up-tool" hidden onChange={(e) => handleGenerateTRD(e.target.files[0])} />
+          <input type="file" id="functional_spec-up-tool" hidden onChange={(e) => handleGenerateFunctionalSpec(e.target.files[0])} />
         </div>
       ) : (
-        <div className="trd-studio-layout">
+        <div className="functional_spec-studio-layout">
           <div className="critic-sidebar">
             <CriticFeedback review={criticReview} />
           </div>
-          <div className="trd-editor glass-card">
+          <div className="functional_spec-editor glass-card">
             <div className="editor-toolbar">
               <span className="doc-status">DRAFT - ARCHITECT GENERATED</span>
               <button className="btn-secondary sm" onClick={() => {
-                const blob = new Blob([trd], { type: 'text/markdown' });
+                const blob = new Blob([functional_spec], { type: 'text/markdown' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -2058,9 +2125,9 @@ const SpecArchitectView = () => {
               }}>Download .md</button>
             </div>
             <div className="markdown-content">
-              <ReactMarkdown>{trd}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{functional_spec}</ReactMarkdown>
             </div>
-            <button className="btn-secondary" style={{ marginTop: '20px' }} onClick={() => setTrd("")}>New Document</button>
+            <button className="btn-secondary" style={{ marginTop: '20px' }} onClick={() => setFunctionalSpec("")}>New Document</button>
           </div>
         </div>
       )}
@@ -2181,6 +2248,60 @@ const FlowDesignerView = () => {
   );
 };
 
+const CollapsibleEpic = ({ epic }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  return (
+    <div className="epic-node" style={{ marginBottom: '16px', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '12px', background: 'rgba(0,0,0,0.2)' }}>
+      <div 
+        className="node-title" 
+        onClick={() => setIsOpen(!isOpen)} 
+        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
+        <span><strong style={{ color: 'var(--accent-primary)' }}>EPIC:</strong> {epic.title}</span>
+        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{isOpen ? '▼ COLLAPSE' : '▶ EXPAND'}</span>
+      </div>
+      {isOpen && (
+        <div style={{ paddingLeft: '20px', marginTop: '12px' }}>
+          {epic.features?.map((feat, i) => <CollapsibleFeature key={feat.id || i} feat={feat} />)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CollapsibleFeature = ({ feat }) => {
+  const [isOpen, setIsOpen] = useState(true);
+  return (
+    <div className="feat-node" style={{ marginBottom: '12px', borderLeft: '2px solid var(--glass-border)', paddingLeft: '12px' }}>
+      <div 
+        className="node-title" 
+        onClick={() => setIsOpen(!isOpen)} 
+        style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.95rem' }}
+      >
+        <span><strong style={{ color: '#00f2ff' }}>FEAT:</strong> {feat.title}</span>
+        <span style={{ fontSize: '0.8rem', opacity: 0.7 }}>{isOpen ? '▼' : '▶'}</span>
+      </div>
+      {isOpen && (
+        <div style={{ paddingLeft: '16px', marginTop: '8px' }}>
+          {feat.user_stories?.map((story, i) => (
+            <div key={story.id || i} className="story-node" style={{ padding: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', marginBottom: '8px', fontSize: '0.85rem' }}>
+              <span className="moscow-tag">{story.moscow}</span>
+              {story.title}
+              {story.tasks && story.tasks.length > 0 && (
+                <div style={{ marginTop: '8px', paddingLeft: '12px', borderLeft: '1px dashed rgba(255,255,255,0.2)' }}>
+                  {story.tasks.map((task, tIdx) => (
+                    <div key={tIdx} style={{ color: 'var(--text-muted)' }}>• Task: {task.title || task}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const BacklogEngineerView = () => {
   const [loading, setLoading] = useState(false);
   const [backlog, setBacklog] = useState(null);
@@ -2290,22 +2411,45 @@ const BacklogEngineerView = () => {
                 <h2>Generated Hierarchy</h2>
                 <span className="status-badge">READY FOR SYNC</span>
               </div>
-              <div className="backlog-explorer">
-                {backlog.epics?.map(epic => (
-                  <div key={epic.id} className="epic-node">
-                    <div className="node-title">EPIC: {epic.title}</div>
-                    {epic.features?.map(feat => (
-                      <div key={feat.id} className="feat-node">
-                        <div className="node-title">FEAT: {feat.title}</div>
-                        {feat.user_stories?.map(story => (
-                          <div key={story.id} className="story-node">
-                            <span className="moscow-tag">{story.moscow}</span>
-                            {story.title}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
+              
+              {(() => {
+                let eCount = 0, fCount = 0, sCount = 0, tCount = 0;
+                backlog.epics?.forEach(e => {
+                  eCount++;
+                  e.features?.forEach(f => {
+                    fCount++;
+                    f.user_stories?.forEach(s => {
+                      sCount++;
+                      if (s.tasks) tCount += s.tasks.length;
+                    });
+                  });
+                });
+                
+                return (
+                  <div className="backlog-metrics-boxes" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--accent-primary)' }}>{eCount}</div>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Epics</div>
+                    </div>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#00f2ff' }}>{fCount}</div>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Features</div>
+                    </div>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#f4df4e' }}>{sCount}</div>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>User Stories</div>
+                    </div>
+                    <div className="glass-card" style={{ padding: '16px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#ff4d4d' }}>{tCount}</div>
+                      <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Tasks</div>
+                    </div>
                   </div>
+                );
+              })()}
+
+              <div className="backlog-explorer" style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '12px' }}>
+                {backlog.epics?.map((epic, i) => (
+                  <CollapsibleEpic key={epic.id || i} epic={epic} />
                 ))}
               </div>
               <div className="workbench-footer">
