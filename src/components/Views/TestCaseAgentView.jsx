@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Loader2, RefreshCw, Send, CheckCircle } from 'lucide-react';
+import TestCasesViewer from './TestCasesViewer';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -169,9 +170,7 @@ const TestCaseAgentView = () => {
                                 {testCasesMarkdown ? (
                                     <>
                                         <div style={{ flex: 1, paddingBottom: '20px' }}>
-                                            <div className="markdown-body">
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{testCasesMarkdown}</ReactMarkdown>
-                                            </div>
+                                            <TestCasesViewer rawData={testCasesMarkdown} />
                                         </div>
                                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                                             {syncSuccess ? (
