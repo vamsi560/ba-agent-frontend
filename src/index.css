@@ -1,4 +1,4 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
   --primary-bg: #06090F;
@@ -507,7 +507,7 @@ input:focus, select:focus, textarea:focus {
 .mini-stat { font-size: 0.9rem; color: var(--accent-primary); }
 .mini-list { list-style: none; padding: 0; margin-top: 8px; }
 .mini-list li { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px; padding-left: 12px; position: relative; }
-.mini-list li::before { content: 'ΓÇó'; position: absolute; left: 0; color: var(--accent-primary); }
+.mini-list li::before { content: '•'; position: absolute; left: 0; color: var(--accent-primary); }
 
 .repository-grid {
   padding: 0;
@@ -1276,7 +1276,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .ac-list li::before {
-    content: "ΓÇó";
+    content: "•";
     position: absolute;
     left: 0;
     color: var(--accent-secondary);
@@ -2363,4 +2363,3 @@ input:focus, select:focus, textarea:focus {
   height: auto;
   object-fit: contain;
 }
-
