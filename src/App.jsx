@@ -5,7 +5,12 @@ import TelemetryDashboard from './components/TelemetryDashboard';
 import ChatWidget from './components/Chatbot/ChatWidget';
 import TestCaseAgentView from './components/Views/TestCaseAgentView';
 import DirectBacklogView from './components/Views/DirectBacklogView';
-import SprintExcelView from './components/Views/SprintExcelView';
+import SprintPlannerView from './components/Views/SprintPlannerView';
+import TestCasesViewer from './components/Views/TestCasesViewer';
+import { 
+  BarChart2, BookOpen, Rocket, Zap, List, Shield, 
+  Search, Code, GitMerge, FileText, CheckCircle, Target, User, ChevronRight, LayoutDashboard, Cloud, UploadCloud
+} from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -14,6 +19,66 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || (
 );
 
 // --- Components ---
+const AdoImportWidget = ({ onGenerate }) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/ado/work-items`);
+      const data = await res.json();
+      setItems(data.work_items || []);
+    } catch (e) {
+      alert('Error fetching ADO items: ' + e.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="discovery-tile glass-card" style={{ maxWidth: '800px', margin: '0 auto 32px', cursor: 'default', flexDirection: 'column', alignItems: 'stretch', padding: '32px' }}>
+      <div className="tile-accent blue"></div>
+      <div className="tile-info" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div>
+          <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem' }}>🔄 Import ADO Epic / Feature</h3>
+          <p>Generate User Stories & Tasks for an existing ADO item.</p>
+        </div>
+        <button className="btn-secondary btn-mini" onClick={fetchItems}>
+          {loading ? 'Fetching...' : 'Fetch Items'}
+        </button>
+      </div>
+      
+      {items.length > 0 && (
+        <div style={{ marginTop: '20px', maxHeight: '300px', overflowY: 'auto' }}>
+          <table className="analysis-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Title</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id}>
+                  <td>{item.id}</td>
+                  <td>{item.type}</td>
+                  <td>{item.title}</td>
+                  <td>
+                    <button className="btn-primary btn-mini" onClick={() => onGenerate(item)}>
+                      Generate Stories
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -23,8 +88,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [completedSteps, setCompletedSteps] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('Project Backstage');
   const [selectedLOB, setSelectedLOB] = useState('Personal Auto');
-  const [selectedModules, setSelectedModules] = useState(['gaps', 'functional_spec', 'flow', 'backlog']);
+  const [selectedModules, setSelectedModules] = useState(['gaps', 'functional_spec', 'backlog', 'test_cases']);
   const [techContext, setTechContext] = useState("");
 
   const toggleModule = (id) => {
@@ -48,18 +114,19 @@ function App() {
     functional_spec: null,
     backlog: null,
     reviews: null,
-    diagram: null
+    test_cases: null
   });
 
   useEffect(() => {
     if (isLoggedIn && currentView === 'dashboard') fetchDashboardData();
-  }, [isLoggedIn, dashboardFilter, currentView]);
+  }, [isLoggedIn, dashboardFilter, currentView, selectedLOB]);
 
   const fetchDashboardData = async () => {
     try {
+      const qs = ""; 
       const [docRes, anaRes, contextRes, metricsRes] = await Promise.all([
-        fetch(`${API_BASE}/documents`),
-        fetch(`${API_BASE}/analyses`),
+        fetch(`${API_BASE}/documents${qs}`),
+        fetch(`${API_BASE}/analyses${qs}`),
         fetch(`${API_BASE}/project-context`),
         fetch(`${API_BASE}/sprint-metrics`)
       ]);
@@ -74,6 +141,51 @@ function App() {
       setSprintMetrics(metricsData);
     } catch (e) { console.error("Data Fetch Error", e); }
   };
+
+  useEffect(() => {
+    const handleGenerateAdo = async (e) => {
+      const epic = e.detail;
+      setLoading(true);
+      setCurrentView('workflow');
+      setActiveStep(6);
+      
+      setWorkflowData({
+        doc: { id: "ado-" + epic.id, name: epic.title },
+        extraction: { functional_requirements: [{ req_id: "REQ-01", description: epic.title }] },
+        functional_spec: "Generated from ADO: " + epic.title,
+        reviews: {
+          qa: [{ category: "Quality", point: "Verify ADO stories", risk: "Low" }],
+          security: [{ category: "Security", point: "Standard review", risk: "Low" }],
+          ux: [{ category: "UX", point: "N/A", risk: "Low" }]
+        },
+        backlog: null,
+        test_cases: null
+      });
+
+      try {
+        const res = await fetch(`${API_BASE}/api/ado/generate-stories`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ epic })
+        });
+        const data = await res.json();
+        
+        setWorkflowData(prev => ({
+          ...prev,
+          backlog: data.backlog,
+          analysis_id: "ado-" + epic.id
+        }));
+        
+        setCompletedSteps([1,2,3,4,5,6]);
+      } catch (err) {
+        alert("Error generating stories: " + err.message);
+      }
+      setLoading(false);
+    };
+
+    window.addEventListener('generate-ado', handleGenerateAdo);
+    return () => window.removeEventListener('generate-ado', handleGenerateAdo);
+  }, []);
 
   const startAutomatedWorkflow = async (file, channel = "document") => {
     setLoading(true);
@@ -134,7 +246,6 @@ function App() {
           analysisId: anaData.analysis_id,
           gaps: anaData.results.gaps,
           reviews: anaData.results.reviews,
-          diagram: anaData.results.diagram,
           clarifications: questions,
           docId: ingestData.document_id
         }));
@@ -147,7 +258,7 @@ function App() {
           analysisId: ingestData.document_id,
           gaps: [],
           reviews: null,
-          diagram: null,
+          test_cases: null,
           clarifications: [],
           docId: ingestData.document_id
         }));
@@ -179,6 +290,7 @@ function App() {
       }
 
       // 4. BACKLOG GENERATION (Conditional)
+      let backData = null;
       if (selectedModules.includes('backlog')) {
         setActiveStep(4);
         const backlogRes = await fetch(`${API_BASE}/generate-backlog`, {
@@ -190,12 +302,25 @@ function App() {
             document_id: ingestData.document_id
           }),
         });
-        const backData = await backlogRes.json();
+        backData = await backlogRes.json();
         setWorkflowData(prev => ({ ...prev, backlog: backData.backlog, critic_review: backData.critic_review }));
         setCompletedSteps(prev => [...prev, 4]);
       }
 
-      setActiveStep(5); // Review Phase
+      // 5. TEST CASE GENERATION (Conditional)
+      if (selectedModules.includes('test_cases') && backData && backData.backlog) {
+        setActiveStep(5);
+        const testCaseRes = await fetch(`${API_BASE}/api/agents/draft-test-cases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backlog_json: backData.backlog, analysis_id: anaData.analysis_id })
+        });
+        const testCaseResult = await testCaseRes.json();
+        setWorkflowData(prev => ({ ...prev, test_cases: testCaseResult.test_cases }));
+        setCompletedSteps(prev => [...prev, 5]);
+      }
+
+      setActiveStep(6); // Review Phase
     } catch (error) {
       alert(`Workflow Error: ${error.message}`);
     } finally {
@@ -233,25 +358,45 @@ function App() {
         body: JSON.stringify({ analysis_id: anaData.analysis_id, tech_context: techContext }),
       });
       const specResult = await specRes.json();
-      setWorkflowData(prev => ({ ...prev, functional_spec: specResult.functional_spec }));
+      setWorkflowData(prev => ({ 
+        ...prev, 
+        functional_spec: specResult.functional_spec,
+        reviews: specResult.reviews || prev.reviews 
+      }));
       setCompletedSteps(prev => [...prev, 3]);
 
-      // 4. BACKLOG GENERATION
-      setActiveStep(4);
-      const backlogRes = await fetch(`${API_BASE}/generate-backlog`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          functional_spec: specResult.functional_spec,
-          analysis_id: anaData.analysis_id,
-          document_id: docId
-        }),
-      });
-      const backData = await backlogRes.json();
-      setWorkflowData(prev => ({ ...prev, backlog: backData.backlog, critic_review: backData.critic_review }));
-      setCompletedSteps(prev => [...prev, 4]);
+      // 4. BACKLOG GENERATION (Conditional)
+      let backData = null;
+      if (selectedModules.includes('backlog')) {
+        setActiveStep(4);
+        const backlogRes = await fetch(`${API_BASE}/generate-backlog`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            functional_spec: specResult.functional_spec,
+            analysis_id: anaData.analysis_id,
+            document_id: docId
+          }),
+        });
+        backData = await backlogRes.json();
+        setWorkflowData(prev => ({ ...prev, backlog: backData.backlog, critic_review: backData.critic_review }));
+        setCompletedSteps(prev => [...prev, 4]);
+      }
 
-      setActiveStep(5);
+      // 5. TEST CASE GENERATION (Conditional)
+      if (selectedModules.includes('test_cases') && backData && backData.backlog) {
+        setActiveStep(5);
+        const testCaseRes = await fetch(`${API_BASE}/api/agents/draft-test-cases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backlog_json: backData.backlog, analysis_id: anaData.analysis_id })
+        });
+        const testCaseResult = await testCaseRes.json();
+        setWorkflowData(prev => ({ ...prev, test_cases: testCaseResult.test_cases }));
+        setCompletedSteps(prev => [...prev, 5]);
+      }
+
+      setActiveStep(6);
     } catch (err) {
       alert(`Resume Error: ${err.message}`);
     } finally {
@@ -261,28 +406,107 @@ function App() {
 
   const resumeExistingAnalysis = async (analysisId) => {
     setLoading(true);
+    setCurrentView('workflow');
     try {
       const res = await fetch(`${API_BASE}/analysis/${analysisId}`);
       const data = await res.json();
       
-      if (!data.results) throw new Error("Analysis results are empty.");
+      const resData = data.results || {};
+      const hasAnyData = Object.keys(resData).length > 0 || data.extraction || data.functional_spec || data.backlog || data.test_cases;
+      if (!hasAnyData) throw new Error("Analysis data is empty.");
 
-      setWorkflowData({
+      // Calculate what is currently complete
+      let currentSpec = data.functional_spec || resData.functional_spec || resData.trd || "";
+      let currentBacklog = data.backlog || resData.backlog || resData.backlog_items || null;
+      let currentTestCases = data.test_cases || resData.test_cases || null;
+      let currentReviews = data.reviews || data.critic_review || resData.reviews || resData.critic_review || null;
+
+      setWorkflowData(prev => ({
+        ...prev,
         analysisId: data.id,
-        extraction: data.results.extraction || {},
-        gaps: data.results.gaps || [],
-        functional_spec: data.original_text || data.results.functional_spec || "",
-        backlog: data.results.backlog || data.results.backlog_items || null,
-        reviews: data.results.reviews || null,
-        diagram: data.results.diagram || null,
+        extraction: data.extraction || resData.extraction || {},
+        gaps: data.gaps || resData.gaps || [],
+        functional_spec: currentSpec,
+        backlog: currentBacklog,
+        test_cases: currentTestCases,
+        reviews: currentReviews,
+        diagram: data.diagram || resData.diagram || null,
         docId: data.document_id
-      });
+      }));
 
-      setCompletedSteps([1, 2, 3, 4]);
+      const completed = [];
+      if (data.extraction || resData.extraction) completed.push(1);
+      if (data.gaps || resData.gaps) completed.push(2);
+      
+      setCompletedSteps([...completed]);
+
+      // 3. FUNCTIONAL SPEC GENERATION (Resume if missing)
+      if (!currentSpec) {
+        setActiveStep(3);
+        const specRes = await fetch(`${API_BASE}/generate-functional-spec`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ analysis_id: data.id, tech_context: "" }),
+        });
+        const specResult = await specRes.json();
+        currentSpec = specResult.functional_spec;
+        setWorkflowData(prev => ({ ...prev, functional_spec: currentSpec }));
+        completed.push(3);
+        setCompletedSteps([...completed]);
+      } else {
+        completed.push(3);
+        setCompletedSteps([...completed]);
+      }
+
+      // 4. BACKLOG GENERATION (Resume if missing)
+      if (!currentBacklog) {
+        setActiveStep(4);
+        const backlogRes = await fetch(`${API_BASE}/generate-backlog`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            functional_spec: currentSpec,
+            analysis_id: data.id,
+            document_id: data.document_id
+          }),
+        });
+        const backData = await backlogRes.json();
+        currentBacklog = backData.backlog;
+        currentReviews = backData.critic_review;
+        setWorkflowData(prev => ({ ...prev, backlog: currentBacklog, reviews: currentReviews }));
+        completed.push(4);
+        setCompletedSteps([...completed]);
+      } else {
+        completed.push(4);
+        setCompletedSteps([...completed]);
+      }
+
+      // 5. TEST CASE GENERATION (Resume if missing)
+      if (!currentTestCases && currentBacklog) {
+        setActiveStep(5);
+        const testCaseRes = await fetch(`${API_BASE}/api/agents/draft-test-cases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backlog_json: currentBacklog, analysis_id: data.id })
+        });
+        const testCaseResult = await testCaseRes.json();
+        currentTestCases = testCaseResult.test_cases;
+        setWorkflowData(prev => ({ ...prev, test_cases: currentTestCases }));
+        completed.push(5);
+        setCompletedSteps([...completed]);
+      } else if (currentTestCases) {
+        completed.push(5);
+        setCompletedSteps([...completed]);
+      }
+
+      // Always show final review at activeStep 5 or 6 depending on UI logic. 
+      // The UI uses activeStep === 5 for the final review area if test cases were generated, but actually line 1090 is activeStep === 5. Wait, we should set it to 5 or 6?
+      // Wait, earlier we found line 1090 is `activeStep === 5 && (` so we MUST set it to 5 to trigger the review panel!
+      // But we just pushed 5 to completed. So activeStep should be 5!
       setActiveStep(5);
-      setCurrentView('workflow');
+      
     } catch (err) {
-      alert(`Load Error: ${err.message}`);
+      alert(`Resume Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -316,7 +540,48 @@ function App() {
     });
   };
 
-  const handleApproveAndSync = async () => {
+  const handleUpdateArtifact = (type, content) => {
+    setWorkflowData(prev => ({ ...prev, [type]: content }));
+  };
+
+  const handleRegenerateArtifact = async (type, currentContent, feedback) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/agents/regenerate-artifact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          artifact_type: type,
+          current_content: currentContent,
+          feedback: feedback,
+          analysis_id: workflowData.analysisId
+        })
+      });
+      if (!res.ok) throw new Error('Regeneration failed');
+      const data = await res.json();
+      let updatedContent = data.content;
+      
+      if (['backlog', 'test_cases', 'reviews'].includes(type)) {
+        try {
+          let clean = updatedContent.trim();
+          if (clean.startsWith('```')) {
+            clean = clean.replace(/^```[a-z]*\n/i, '').replace(/\n```$/i, '').trim();
+          }
+          updatedContent = JSON.parse(clean);
+        } catch (e) {
+          // Keep as string if parsing fails
+        }
+      }
+      setWorkflowData(prev => ({ ...prev, [type]: updatedContent }));
+    } catch (e) {
+      alert("Error regenerating: " + e.message);
+    }
+  };
+
+  const handleApproveAndSync = async (reviewerEmail) => {
+    if (!reviewerEmail) {
+      alert("Please enter a valid email address.");
+      return;
+    }
     setIsSyncing(true);
     try {
       const response = await fetch(`${API_BASE}/request-approval`, {
@@ -324,7 +589,8 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           analysis_id: workflowData.analysisId,
-          backlog: workflowData.backlog
+          backlog: workflowData.backlog,
+          reviewer_email: reviewerEmail
         }),
       });
       const result = await response.json();
@@ -355,13 +621,28 @@ function App() {
         </div>
 
         <nav className="side-nav">
+          <div className="nav-group" style={{ marginBottom: '20px' }}>
+            <div className="nav-label">Context</div>
+            {!isSidebarCollapsed ? (
+              <select 
+                value={selectedProject}
+                style={{ width: '90%', padding: '8px', background: 'rgba(0,0,0,0.05)', color: '#000', border: '1px solid rgba(0,0,0,0.2)', borderRadius: '5px', outline: 'none' }}
+                onChange={(e) => setSelectedProject(e.target.value)}
+              >
+                <option value="Project Backstage" style={{ color: '#000', background: '#fff' }}>Project Backstage (ADO)</option>
+              </select>
+            ) : (
+              <div style={{ textAlign: 'center', fontSize: '1.2rem' }}>🏢</div>
+            )}
+          </div>
+
           <div className="nav-group">
             <div className="nav-label">Intelligence Hub</div>
             <div className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}>
-              <span className="nav-icon">📊</span> {!isSidebarCollapsed && "Command Center"}
+              <span className="nav-icon"><LayoutDashboard size={18} /></span> {!isSidebarCollapsed && "Command Center"}
             </div>
             <div className={`nav-item ${currentView === 'knowledge_vault' ? 'active' : ''}`} onClick={() => setCurrentView('knowledge_vault')}>
-              <span className="nav-icon">🧠</span> {!isSidebarCollapsed && "Institutional Memory"}
+              <span className="nav-icon"><BookOpen size={18} /></span> {!isSidebarCollapsed && "Institutional Memory"}
             </div>
           </div>
 
@@ -369,44 +650,44 @@ function App() {
             <div className="nav-label">Delivery OS</div>
             <div className={`nav-item ${currentView === 'new_analysis' ? 'active' : ''}`} onClick={() => {
               setCurrentView('new_analysis');
-              setSelectedModules(['gaps', 'functional_spec', 'flow', 'backlog']);
+              setSelectedModules(['gaps', 'functional_spec', 'test_cases', 'backlog']);
             }}>
-              <span className="nav-icon">🚀</span> {!isSidebarCollapsed && "Discovery Swarm"}
+              <span className="nav-icon"><Rocket size={18} /></span> {!isSidebarCollapsed && "Discovery Swarm"}
             </div>
             <div className={`nav-item ${currentView === 'quick_backlog' ? 'active' : ''}`} onClick={() => setCurrentView('quick_backlog')}>
-              <span className="nav-icon">⚡</span> {!isSidebarCollapsed && "Quick Backlog"}
+              <span className="nav-icon"><Zap size={18} /></span> {!isSidebarCollapsed && "Quick Backlog"}
             </div>
             <div className={`nav-item ${currentView === 'work_items' ? 'active' : ''}`} onClick={() => setCurrentView('work_items')}>
-              <span className="nav-icon">📋</span> {!isSidebarCollapsed && "Backlog Explorer"}
+              <span className="nav-icon"><List size={18} /></span> {!isSidebarCollapsed && "Backlog Explorer"}
             </div>
             <div className={`nav-item ${currentView === 'traceability' ? 'active' : ''}`} onClick={() => setCurrentView('traceability')}>
-              <span className="nav-icon">🛡️</span> {!isSidebarCollapsed && "Governance Matrix"}
+              <span className="nav-icon"><GitMerge size={18} /></span> {!isSidebarCollapsed && "Governance Matrix"}
             </div>
           </div>
 
           <div className="nav-group">
             <div className="nav-label">Agentic Tools</div>
             <div className={`nav-item ${currentView === 'gap_detective' ? 'active' : ''}`} onClick={() => setCurrentView('gap_detective')}>
-              <span className="nav-icon">🔍</span> {!isSidebarCollapsed && "Gap Detective"}
+              <span className="nav-icon"><Search size={18} /></span> {!isSidebarCollapsed && "Gap Detective"}
             </div>
             <div className={`nav-item ${currentView === 'spec_architect' ? 'active' : ''}`} onClick={() => setCurrentView('spec_architect')}>
-              <span className="nav-icon">🏗️</span> {!isSidebarCollapsed && "Functional Architect"}
+              <span className="nav-icon"><FileText size={18} /></span> {!isSidebarCollapsed && "Functional Architect"}
             </div>
             <div className={`nav-item ${currentView === 'flow_designer' ? 'active' : ''}`} onClick={() => setCurrentView('flow_designer')}>
-              <span className="nav-icon">🎨</span> {!isSidebarCollapsed && "Flow Designer"}
+              <span className="nav-icon"><Target size={18} /></span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
             <div className={`nav-item ${currentView === 'test_case_agent' ? 'active' : ''}`} onClick={() => setCurrentView('test_case_agent')}>
-              <span className="nav-icon">🧪</span> {!isSidebarCollapsed && "Test Case Agent"}
+              <span className="nav-icon"><CheckCircle size={18} /></span> {!isSidebarCollapsed && "Test Case Agent"}
             </div>
-            <div className={`nav-item ${currentView === 'sprint_excel' ? 'active' : ''}`} onClick={() => setCurrentView('sprint_excel')}>
-              <span className="nav-icon">📅</span> {!isSidebarCollapsed && "Sprint Excel Sync"}
+            <div className={`nav-item ${currentView === 'sprint_planner' ? 'active' : ''}`} onClick={() => setCurrentView('sprint_planner')}>
+              <span className="nav-icon"><BarChart2 size={18} /></span> {!isSidebarCollapsed && "Sprint Planner"}
             </div>
           </div>
           
           <div className="nav-group">
             <div className="nav-label">Admin</div>
             <div className={`nav-item ${currentView === 'telemetry' ? 'active' : ''}`} onClick={() => setCurrentView('telemetry')}>
-              <span className="nav-icon">🛡️</span> {!isSidebarCollapsed && "LLMOps Telemetry"}
+              <span className="nav-icon"><Cloud size={18} /></span> {!isSidebarCollapsed && "LLMOps Telemetry"}
             </div>
           </div>
         </nav>
@@ -452,8 +733,8 @@ function App() {
           <DirectBacklogView />
         )}
 
-        {currentView === 'sprint_excel' && (
-          <SprintExcelView />
+        {currentView === 'sprint_planner' && (
+          <SprintPlannerView />
         )}
 
         {currentView === 'releases' && (
@@ -515,6 +796,8 @@ function App() {
             completedSteps={completedSteps}
             data={workflowData}
             onFinish={handleApproveAndSync}
+            onUpdateArtifact={handleUpdateArtifact}
+            onRegenerateArtifact={handleRegenerateArtifact}
             onClose={() => setCurrentView('dashboard')}
             isSyncing={isSyncing}
             onToggle={toggleSelection}
@@ -731,7 +1014,7 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
       </header>
 
       <div className="ingestion-tabs-container" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginBottom: '24px' }}>
-         {['file', 'text', 'visual', 'meeting'].map(mode => (
+         {['file', 'text', 'visual', 'meeting', 'ado'].map(mode => (
            <button 
              key={mode} 
              className={`btn-tab ${ingestMode === mode ? 'active' : ''}`}
@@ -742,6 +1025,7 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
              {mode === 'text' && '✍️ Direct Text'}
              {mode === 'visual' && '🖼️ Visuals'}
              {mode === 'meeting' && '🎙️ Meetings'}
+             {mode === 'ado' && '🔄 ADO Import'}
            </button>
          ))}
       </div>
@@ -752,9 +1036,9 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
           <div className="tile-icon">📂</div>
           <div className="tile-info">
             <h3>Upload Source Document</h3>
-            <p>Analyze BRD, PRD, or functional specs (PDF, DOCX)</p>
+            <p>Analyze BRD, PRD, or functional specs (PDF, DOCX, XLSX, PPTX)</p>
           </div>
-          <input type="file" id="brd-up" hidden onChange={(e) => onSelect(e.target.files[0], "document")} />
+          <input type="file" id="brd-up" accept=".pdf,.docx,.xlsx,.pptx" hidden onChange={(e) => onSelect(e.target.files[0], "document")} />
           <div className="tile-action">Analyze Document</div>
         </div>
       )}
@@ -799,6 +1083,10 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
         </div>
       )}
 
+      {ingestMode === 'ado' && (
+        <AdoImportWidget onGenerate={(epic) => window.dispatchEvent(new CustomEvent('generate-ado', {detail: epic}))} />
+      )}
+
       <div className="lob-selector-container animation-fade-in" style={{ maxWidth: '800px', margin: '0 auto' }}>
         <label>Select Target Context (LOB)</label>
         <div className="lob-grid">
@@ -834,9 +1122,8 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
           {[
             { id: 'gaps', label: 'Gap Analysis', icon: '🔍' },
             { id: 'functional_spec', label: 'Functional Spec', icon: '📝' },
-            { id: 'flow', label: 'Process Flow', icon: '🎋' },
             { id: 'backlog', label: 'Backlog', icon: '📂' },
-            { id: 'deep_analysis', label: 'Deep Analysis (Debate)', icon: '⚖️' }
+            { id: 'test_cases', label: 'Test Cases', icon: '🧪' }
           ].map(module => (
             <label key={module.id} className={`module-chip ${selectedModules.includes(module.id) ? 'active' : ''}`}>
               <input 
@@ -855,17 +1142,95 @@ const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules,
   );
 };
 
-const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isSyncing, onToggle }) => {
+const ArtifactEditorWrapper = ({ title, artifactType, rawContent, onSave, onRegenerate, children }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const handleEditClick = () => {
+    setEditContent(typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent, null, 2));
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    let finalContent = editContent;
+    if (typeof rawContent === 'object' && rawContent !== null) {
+      try { finalContent = JSON.parse(editContent); } catch (e) { alert("Invalid JSON! Please fix."); return; }
+    }
+    onSave(artifactType, finalContent);
+    setIsEditing(false);
+  };
+
+  const handleRegenerate = async () => {
+    if (!feedback) return;
+    setIsRegenerating(true);
+    await onRegenerate(artifactType, typeof rawContent === 'string' ? rawContent : JSON.stringify(rawContent), feedback);
+    setIsRegenerating(false);
+    setFeedback('');
+  };
+
+  return (
+    <div className="artifact-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {isEditing ? (
+          <textarea 
+            value={editContent} 
+            onChange={(e) => setEditContent(e.target.value)}
+            style={{ width: '100%', minHeight: '400px', height: '100%', fontFamily: 'monospace' }}
+          />
+        ) : (
+          children
+        )}
+      </div>
+      
+      <div className="artifact-actions glass-card" style={{ display: 'flex', gap: '16px', padding: '16px', alignItems: 'center', flexWrap: 'wrap', marginTop: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', borderRight: '1px solid var(--glass-border)', paddingRight: '16px' }}>
+          {isEditing ? (
+            <>
+              <button className="btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+              <button className="btn-primary" onClick={handleSave}>💾 Save Manual Edits</button>
+            </>
+          ) : (
+            <button className="btn-secondary" onClick={handleEditClick}>✏️ Manual Edit</button>
+          )}
+        </div>
+        
+        <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+          <input 
+            type="text" 
+            placeholder="Feedback for AI (e.g. 'Add a SSO login page requirement')" 
+            value={feedback} 
+            onChange={(e) => setFeedback(e.target.value)} 
+            disabled={isEditing || isRegenerating}
+            style={{ flex: 1 }}
+          />
+          <button 
+            className="btn-primary" 
+            onClick={handleRegenerate}
+            disabled={!feedback || isEditing || isRegenerating}
+          >
+            {isRegenerating ? '⏳ Regenerating...' : '✨ Regenerate with AI'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isSyncing, onToggle, onUpdateArtifact, onRegenerateArtifact }) => {
   const [activeReviewTab, setActiveReviewTab] = useState('functional_spec'); // 'functional_spec', 'backlog', 'flow'
   const [showAllReqs, setShowAllReqs] = useState(false);
   const [showAllGaps, setShowAllGaps] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [reviewerEmail, setReviewerEmail] = useState('');
 
   const STEPS = [
-
     { title: 'Extraction', icon: '🔍', key: 'extraction' },
     { title: 'Gap Analysis', icon: '🧠', key: 'gaps' },
     { title: 'Functional Spec', icon: '📝', key: 'functional_spec' },
     { title: 'Backlog Mapping', icon: '🧩', key: 'backlog' },
+    { title: 'Test Cases', icon: '🧪', key: 'test_cases' },
   ];
 
   const renderStepResult = (stepIdx) => {
@@ -893,7 +1258,8 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
         );
       case 'gaps':
         const reviews = data.reviews || {};
-        const gapsToShow = showAllGaps ? stepData.gaps : stepData.gaps?.slice(0, 3);
+        const gapsArray = Array.isArray(stepData) ? stepData : stepData?.gaps;
+        const gapsToShow = showAllGaps ? gapsArray : gapsArray?.slice(0, 3);
         return (
           <div className="step-result-card glass-card">
             <h4>{step.icon} Risk & Agentic Council Review</h4>
@@ -915,13 +1281,13 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                     )}
                 </div>
               ))}
-              {!showAllGaps && stepData.gaps?.length > 3 && (
+              {!showAllGaps && gapsArray?.length > 3 && (
                 <div 
                     className="risk-tag" 
                     style={{ cursor: 'pointer', textAlign: 'center', marginTop: '8px', display: 'block', padding: '8px' }}
                     onClick={() => setShowAllGaps(true)}
                 >
-                    + {stepData.gaps.length - 3} more Gaps (Click to Expand)
+                    + {gapsArray.length - 3} more Gaps (Click to Expand)
                 </div>
               )}
               {showAllGaps && (
@@ -946,11 +1312,21 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
           </div>
         );
       case 'backlog':
+        const backlogEpics = Array.isArray(stepData) ? stepData : stepData?.epics;
         return (
           <div className="step-result-card glass-card">
             <h4>{step.icon} Backlog Architecture</h4>
             <div className="backlog-summary">
-              {stepData.epics?.length} Epics | {stepData.epics?.[0]?.features?.length} Features
+              {backlogEpics?.length} Epics | {backlogEpics?.[0]?.features?.length} Features
+            </div>
+          </div>
+        );
+      case 'test_cases':
+        return (
+          <div className="step-result-card glass-card">
+            <h4>{step.icon} QA Test Cases Generated</h4>
+            <div className="backlog-summary">
+              Test Cases have been successfully drafted and mapped to the backlog.
             </div>
           </div>
         );
@@ -962,16 +1338,16 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
   return (
     <div className="view-container">
       <header className="view-header">
-        <div className="title-area">
+          <div className="title-area">
           <h1>Project Orchestration</h1>
           <p>Real-time requirement discovery and technical mapping pipeline.</p>
         </div>
         <div className="header-actions">
           <button className="btn-secondary" onClick={onClose} style={{ marginRight: '12px' }}>✕ Close Session</button>
           {activeStep === 5 && (
-            <button
-              className="btn-primary"
-              onClick={onFinish}
+            <button 
+              className="btn-primary pulse-btn" 
+              onClick={() => setShowEmailModal(true)}
               disabled={isSyncing}
             >
               {isSyncing ? '⏳ Syncing to ADO...' : '🚀 Approve & Sync to ADO'}
@@ -1040,13 +1416,13 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
             )
           )}
 
-          {activeStep === 5 && (
+          {activeStep >= 5 && (
             <div className="final-review-area animation-fade-in">
               <div className="review-header">
                 <h2>Final Project Orchestration</h2>
                 <div className="review-actions">
                   <button className="btn-secondary" onClick={() => window.open(`${API_BASE}/download-spec/${data.docId}`, '_blank')}>Export PDF</button>
-                  <button className="btn-primary" onClick={onFinish}>Approve & Sync to ADO</button>
+                  <button className="btn-primary" onClick={() => setShowEmailModal(true)}>Approve & Sync to ADO</button>
                 </div>
               </div>
 
@@ -1056,7 +1432,7 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                   <button className={`btn-tab ${activeReviewTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveReviewTab('reviews')}>Persona Reviews</button>
                   <button className={`btn-tab ${activeReviewTab === 'backlog' ? 'active' : ''}`} onClick={() => setActiveReviewTab('backlog')}>Backlog Tree</button>
                   <button className={`btn-tab ${activeReviewTab === 'traceability' ? 'active' : ''}`} onClick={() => setActiveReviewTab('traceability')}>Traceability Matrix</button>
-                  <button className={`btn-tab ${activeReviewTab === 'flow' ? 'active' : ''}`} onClick={() => setActiveReviewTab('flow')}>Visual Flow</button>
+                  <button className={`btn-tab ${activeReviewTab === 'test_cases' ? 'active' : ''}`} onClick={() => setActiveReviewTab('test_cases')}>Test Cases</button>
                   <button className={`btn-tab ${activeReviewTab === 'governance' ? 'active' : ''}`} onClick={() => setActiveReviewTab('governance')}>🛡️ Governance Trail</button>
                 </div>
               </div>
@@ -1064,29 +1440,57 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
               <div className="review-content">
                 {activeReviewTab === 'functional_spec' && (
                   <div className="panel spec-panel full-width animation-fade-in">
-                    <div className="doc-page">
-                      <header className="doc-header">
-                        <img src="/assets/ValueMomentumlogodark.png" height="30" alt="logo" />
-                        <div className="doc-meta">Technical Requirements Document v1.0</div>
-                      </header>
-                      <article className="doc-content">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.functional_spec}</ReactMarkdown>
-                      </article>
-                    </div>
+                    <ArtifactEditorWrapper 
+                      title="Functional Specification" 
+                      artifactType="functional_spec" 
+                      rawContent={data.functional_spec} 
+                      onSave={onUpdateArtifact} 
+                      onRegenerate={onRegenerateArtifact}
+                    >
+                      <div className="doc-page">
+                        <header className="doc-header">
+                          <img src="/assets/ValueMomentumlogodark.png" height="30" alt="logo" />
+                          <div className="doc-meta">Technical Requirements Document v1.0</div>
+                        </header>
+                        <article className="doc-content">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.functional_spec}</ReactMarkdown>
+                        </article>
+                      </div>
+                    </ArtifactEditorWrapper>
                   </div>
                 )}
 
                 {activeReviewTab === 'reviews' && (
                   <div className="panel review-panel full-width animation-fade-in">
-                    <PersonaReviews reviews={data.reviews} />
+                    <ArtifactEditorWrapper 
+                      title="Persona Reviews" 
+                      artifactType="reviews" 
+                      rawContent={data.reviews} 
+                      onSave={onUpdateArtifact} 
+                      onRegenerate={onRegenerateArtifact}
+                    >
+                      <PersonaReviews reviews={data.reviews} />
+                    </ArtifactEditorWrapper>
                   </div>
                 )}
 
                 {activeReviewTab === 'backlog' && (
                   <div className="panel backlog-panel full-width animation-fade-in">
-                    <div className="backlog-tree-container">
-                      <BacklogTree data={data.backlog} onToggle={onToggle} />
-                    </div>
+                    <ArtifactEditorWrapper 
+                      title="Backlog Tree" 
+                      artifactType="backlog" 
+                      rawContent={data.backlog} 
+                      onSave={onUpdateArtifact} 
+                      onRegenerate={onRegenerateArtifact}
+                    >
+                      <div className="backlog-tree-container">
+                        <BacklogTree 
+                          data={data.backlog} 
+                          onToggle={onToggle} 
+                          onUpdateBacklog={(updatedData) => onUpdateArtifact('backlog', updatedData)} 
+                        />
+                      </div>
+                    </ArtifactEditorWrapper>
                   </div>
                 )}
 
@@ -1096,9 +1500,17 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                   </div>
                 )}
 
-                {activeReviewTab === 'flow' && (
-                  <div className="panel flow-panel full-width animation-fade-in">
-                    <VisualFlow diagram={data.diagram} />
+                {activeReviewTab === 'test_cases' && (
+                  <div className="panel testcases-panel full-width animation-fade-in" style={{ padding: '24px', overflowY: 'auto', maxHeight: '600px' }}>
+                    <ArtifactEditorWrapper 
+                      title="Test Cases" 
+                      artifactType="test_cases" 
+                      rawContent={data.test_cases} 
+                      onSave={onUpdateArtifact} 
+                      onRegenerate={onRegenerateArtifact}
+                    >
+                      <TestCasesViewer rawData={data.test_cases} />
+                    </ArtifactEditorWrapper>
                   </div>
                 )}
 
@@ -1109,18 +1521,96 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                 )}
 
               </div>
-
             </div>
           )}
         </div>
       </div>
+      {showEmailModal && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-card" style={{ maxWidth: '500px', width: '100%' }}>
+            <h3 style={{ marginTop: 0, color: 'var(--accent-primary)' }}>Request Review & Sync</h3>
+            <p style={{ color: 'var(--text-muted)' }}>Enter the stakeholder's email address to send the analysis artifacts for approval.</p>
+            <input 
+              type="email" 
+              placeholder="reviewer@example.com"
+              value={reviewerEmail}
+              onChange={(e) => setReviewerEmail(e.target.value)}
+              className="glass-input"
+              style={{ width: '100%', padding: '12px', marginTop: '10px', fontSize: '1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}
+            />
+            <div className="modal-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setShowEmailModal(false)}>Cancel</button>
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  setShowEmailModal(false);
+                  onFinish(reviewerEmail);
+                }}
+              >
+                Send Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-const BacklogTree = ({ data, onToggle }) => {
-  console.log("BacklogTree Data:", data);
-  if (!data || !data.epics || data.epics.length === 0) {
+const BacklogTree = ({ data, onToggle, onUpdateBacklog }) => {
+  const [editingPath, setEditingPath] = useState(null);
+  const [editForm, setEditForm] = useState({ title: '', description: '', acceptance_criteria: '' });
+
+  const epicsList = Array.isArray(data) ? data : data?.epics;
+  
+  const handleEditClick = (pathStr, node) => {
+    setEditingPath(pathStr);
+    setEditForm({
+      title: node.title || '',
+      description: node.description || '',
+      acceptance_criteria: node.acceptance_criteria ? node.acceptance_criteria.join('\n') : ''
+    });
+  };
+
+  const handleSave = (eIdx, fIdx, sIdx) => {
+    const isArrayData = Array.isArray(data);
+    const updatedData = isArrayData ? [...data] : { ...data };
+    const epics = isArrayData ? updatedData : [...updatedData.epics];
+    
+    // Deep clone the epic we're modifying
+    const newEpic = { ...epics[eIdx] };
+    
+    if (sIdx !== undefined) {
+      const newFeatures = [...newEpic.features];
+      const newFeature = { ...newFeatures[fIdx] };
+      const newStories = [...newFeature.user_stories];
+      
+      newStories[sIdx] = {
+        ...newStories[sIdx],
+        title: editForm.title,
+        description: editForm.description,
+        acceptance_criteria: editForm.acceptance_criteria.split('\n').filter(a => a.trim())
+      };
+      
+      newFeature.user_stories = newStories;
+      newFeatures[fIdx] = newFeature;
+      newEpic.features = newFeatures;
+    } else if (fIdx !== undefined) {
+      const newFeatures = [...newEpic.features];
+      newFeatures[fIdx] = { ...newFeatures[fIdx], title: editForm.title };
+      newEpic.features = newFeatures;
+    } else {
+      newEpic.title = editForm.title;
+    }
+    
+    epics[eIdx] = newEpic;
+    if (!isArrayData) updatedData.epics = epics;
+    
+    onUpdateBacklog && onUpdateBacklog(updatedData);
+    setEditingPath(null);
+  };
+
+  if (!epicsList || epicsList.length === 0) {
     return (
       <div className="no-data-loading">
         <div className="discovery-spinner"></div>
@@ -1132,7 +1622,7 @@ const BacklogTree = ({ data, onToggle }) => {
 
   return (
     <div className="hierarchy">
-      {data.epics.map((epic, eIdx) => (
+      {epicsList.map((epic, eIdx) => (
         <div key={eIdx} className={`node epic ${epic.selected === false ? 'unselected' : ''}`}>
           <div className="node-head">
             <input 
@@ -1144,8 +1634,18 @@ const BacklogTree = ({ data, onToggle }) => {
             <span className="node-tag">EPIC</span>
             {epic.title}
             {epic.remote_id && <span className="linked-badge">🔗 {epic.remote_id}</span>}
+            <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`epic-${eIdx}`, epic)}>✏️</button>
           </div>
-          <div className="node-body">
+          {editingPath === `epic-${eIdx}` ? (
+            <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Epic Title" />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button className="btn-primary mini" onClick={() => handleSave(eIdx)}>Save</button>
+                <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+              </div>
+            </div>
+          ) : (
+            <div className="node-body">
             {epic.features?.map((feature, fIdx) => (
               <div key={fIdx} className={`node feature ${feature.selected === false ? 'unselected' : ''}`}>
                 <div className="node-head">
@@ -1158,8 +1658,18 @@ const BacklogTree = ({ data, onToggle }) => {
                   <span className="node-tag">FEATURE</span>
                   {feature.title}
                   {feature.remote_id && <span className="linked-badge">🔗 {feature.remote_id}</span>}
+                  <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`feat-${eIdx}-${fIdx}`, feature)}>✏️</button>
                 </div>
-                <div className="node-body">
+                {editingPath === `feat-${eIdx}-${fIdx}` ? (
+                  <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Feature Title" />
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                      <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx)}>Save</button>
+                      <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="node-body">
                   {feature.user_stories?.map((story, sIdx) => (
                     <div key={sIdx} className={`node story ${story.selected === false ? 'unselected' : ''}`}>
                       <div className="node-head">
@@ -1180,39 +1690,54 @@ const BacklogTree = ({ data, onToggle }) => {
                         {story.story_points && (
                           <span className="points-badge">{story.story_points} pts</span>
                         )}
+                        <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`story-${eIdx}-${fIdx}-${sIdx}`, story)}>✏️</button>
                       </div>
 
-                      <div className="node-body">
-                        <div className="story-details">
-                          <p className="story-desc">{story.description}</p>
-
-                          {story.acceptance_criteria?.length > 0 && (
-                            <div className="ac-section">
-                              <h6>Acceptance Criteria</h6>
-                              <ul className="ac-list">
-                                {story.acceptance_criteria.map((ac, idx) => (
-                                  <li key={idx}>{ac}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          {story.tasks?.map((task, tIdx) => (
-                            <div key={tIdx} className="node task">
-                              <div className="node-head">
-                                <span className="node-tag">TASK</span>
-                                {task}
-                              </div>
-                            </div>
-                          ))}
+                      {editingPath === `story-${eIdx}-${fIdx}-${sIdx}` ? (
+                        <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Story Title" />
+                          <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="edit-textarea" placeholder="Description" rows={3} />
+                          <textarea value={editForm.acceptance_criteria} onChange={e => setEditForm({...editForm, acceptance_criteria: e.target.value})} className="edit-textarea" placeholder="Acceptance Criteria (one per line)" rows={4} />
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                            <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx, sIdx)}>Save</button>
+                            <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="node-body">
+                          <div className="story-details">
+                            <p className="story-desc">{story.description}</p>
+
+                            {story.acceptance_criteria?.length > 0 && (
+                              <div className="ac-section">
+                                <h6>Acceptance Criteria</h6>
+                                <ul className="ac-list">
+                                  {story.acceptance_criteria.map((ac, idx) => (
+                                    <li key={idx}>{ac}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {story.tasks?.map((task, tIdx) => (
+                              <div key={tIdx} className="node task">
+                                <div className="node-head">
+                                  <span className="node-tag">TASK</span>
+                                  {task}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+              )}
               </div>
             ))}
           </div>
+          )}
         </div>
       ))}
     </div>
@@ -1276,9 +1801,14 @@ const PersonaReviews = ({ reviews }) => {
       {Object.entries(reviews).map(([key, reviewData]) => {
         const lowerKey = key.toLowerCase();
         let items = [];
-        if (lowerKey === 'qa') items = reviewData?.qa_review || [];
-        if (lowerKey === 'security') items = reviewData?.security_review || [];
-        if (lowerKey === 'ux') items = reviewData?.ux_review || [];
+        if (Array.isArray(reviewData)) {
+          items = reviewData;
+        } else if (typeof reviewData === 'object' && reviewData !== null) {
+          if (lowerKey === 'qa') items = reviewData.qa_review || reviewData.qa || [reviewData];
+          else if (lowerKey === 'security') items = reviewData.security_review || reviewData.security || [reviewData];
+          else if (lowerKey === 'ux') items = reviewData.ux_review || reviewData.ux || [reviewData];
+        }
+        if (!Array.isArray(items)) items = [];
         
         return (
           <div key={key} className={`persona-card glass-card ${lowerKey}`}>
