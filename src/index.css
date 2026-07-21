@@ -997,3 +997,91 @@ input:focus, select:focus, textarea:focus {
   background: rgba(255,255,255,0.02) !important;
   transform: scale(1.01);
 }
+
+/* --- Added Login Missing Classes --- */
+
+.global-brand-corner {
+  position: absolute;
+  top: 40px;
+  left: 40px;
+  z-index: 20;
+}
+
+.corner-logo {
+  height: 35px;
+}
+
+.login-hero-info {
+  position: absolute;
+  left: 10%;
+  top: 50%;
+  transform: translateY(-50%);
+  color: white;
+  z-index: 20;
+  max-width: 500px;
+}
+
+.hero-title {
+  font-size: 4.5rem;
+  font-weight: 800;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero-tagline {
+  font-size: 1.5rem;
+  margin-bottom: 30px;
+  opacity: 0.9;
+}
+
+.hero-list {
+  list-style: none;
+  font-size: 1.1rem;
+}
+
+.hero-list li {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.presents-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.vm-presents-logo {
+  height: 40px;
+  margin-bottom: 8px;
+}
+
+.presents-text {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0.6;
+}
+
+.card-brand-title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--accent-primary);
+}
+
+.card-brand-tagline {
+  font-size: 0.9rem;
+  opacity: 0.7;
+  margin-bottom: 32px;
+}
+
+.login-footer {
+  margin-top: 32px;
+  font-size: 0.75rem;
+  opacity: 0.5;
+}
