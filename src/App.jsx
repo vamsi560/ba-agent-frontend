@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Enterprise Discovery Platform v1.1
+import React, { useState, useEffect, useMemo } from 'react'; // Enterprise Discovery Platform v1.1
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import TelemetryDashboard from './components/TelemetryDashboard';
@@ -7,9 +7,11 @@ import TestCaseAgentView from './components/Views/TestCaseAgentView';
 import DirectBacklogView from './components/Views/DirectBacklogView';
 import SprintPlannerView from './components/Views/SprintPlannerView';
 import TestCasesViewer from './components/Views/TestCasesViewer';
+import FunctionalSpecAccordionViewer from './components/Views/FunctionalSpecAccordionViewer';
+import StoryDetailsFormatted from './components/StoryDetailsFormatted';
 import { 
   BarChart2, BookOpen, Rocket, Zap, List, Shield, 
-  Search, Code, GitMerge, FileText, CheckCircle, Target, User, ChevronRight, LayoutDashboard, Cloud, UploadCloud
+  Search, Code, GitMerge, FileText, CheckCircle, Target, User, ChevronRight, LayoutDashboard, Cloud, UploadCloud, Send
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
@@ -202,11 +204,10 @@ function App() {
       const ingestRes = await fetch(`${API_BASE}/ingest`, { method: 'POST', body: formData });
       const ingestData = await ingestRes.json();
 
-      if (!ingestData.extraction) {
-        throw new Error(ingestData.detail || "Ingestion failed to extract content.");
+      setWorkflowData(prev => ({ ...prev, extraction: ingestData.extraction, docId: ingestData.document_id }));
+      if (ingestData.document_id) {
+        try { localStorage.setItem('active_doc_id', ingestData.document_id); } catch(e) {}
       }
-
-      setWorkflowData(prev => ({ ...prev, extraction: ingestData.extraction }));
       setCompletedSteps(prev => [...prev, 1]);
 
       // 2. GAP ANALYSIS (Modular)
@@ -431,8 +432,12 @@ function App() {
         test_cases: currentTestCases,
         reviews: currentReviews,
         diagram: data.diagram || resData.diagram || null,
-        docId: data.document_id
+        docId: data.document_id || data.id
       }));
+
+      if (data.document_id || data.id) {
+        try { localStorage.setItem('active_doc_id', data.document_id || data.id); } catch(e) {}
+      }
 
       const completed = [];
       if (data.extraction || resData.extraction) completed.push(1);
@@ -510,6 +515,13 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCloseSession = () => {
+    setWorkflowData({ extraction: null, gaps: null, functional_spec: null, backlog: null, reviews: null, test_cases: null });
+    setCompletedSteps([]);
+    try { localStorage.removeItem('active_doc_id'); } catch(e) {}
+    setCurrentView('new_analysis');
   };
 
   const toggleSelection = (level, indices) => {
@@ -611,11 +623,9 @@ function App() {
     <div className={`app-layout ${isSidebarCollapsed ? 'collapsed' : ''}`}>
       {/* Sidebar */}
       <aside className="sidebar">
-        <div className="brand">
-          {!isSidebarCollapsed && <img src="/assets/ValueMomentumlogo.png" alt="Logo" className="sidebar-logo" />}
-
-
-          <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+        <div className="brand" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', width: '100%' }}>
+          {!isSidebarCollapsed && <img src="/assets/ValueMomentumlogo.png" alt="Logo" className="sidebar-logo" style={{ margin: '0 auto', display: 'block' }} />}
+          <button className="sidebar-toggle" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} style={{ position: isSidebarCollapsed ? 'static' : 'absolute', right: 0 }}>
             {isSidebarCollapsed ? '>' : '<'}
           </button>
         </div>
@@ -639,48 +649,56 @@ function App() {
           <div className="nav-group">
             <div className="nav-label">Intelligence Hub</div>
             <div className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentView('dashboard')}>
-              <span className="nav-icon"><LayoutDashboard size={18} /></span> {!isSidebarCollapsed && "Command Center"}
+              <span className="nav-icon"><img src="/assets/icons/dashboard.png" width="18" height="18" alt="Dashboard" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Command Center"}
             </div>
             <div className={`nav-item ${currentView === 'knowledge_vault' ? 'active' : ''}`} onClick={() => setCurrentView('knowledge_vault')}>
-              <span className="nav-icon"><BookOpen size={18} /></span> {!isSidebarCollapsed && "Institutional Memory"}
+              <span className="nav-icon"><img src="/assets/icons/briefcase.png" width="18" height="18" alt="Memory" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Institutional Memory"}
             </div>
           </div>
 
           <div className="nav-group">
             <div className="nav-label">Delivery OS</div>
-            <div className={`nav-item ${currentView === 'new_analysis' ? 'active' : ''}`} onClick={() => {
-              setCurrentView('new_analysis');
-              setSelectedModules(['gaps', 'functional_spec', 'test_cases', 'backlog']);
+            <div className={`nav-item ${currentView === 'new_analysis' || currentView === 'workflow' || currentView === 'clarification' ? 'active' : ''}`} onClick={() => {
+              if (workflowData && (workflowData.docId || workflowData.extraction || workflowData.analysisId)) {
+                if (workflowData.clarifications && workflowData.clarifications.length > 0 && completedSteps.length < 3) {
+                  setCurrentView('clarification');
+                } else {
+                  setCurrentView('workflow');
+                }
+              } else {
+                setCurrentView('new_analysis');
+                setSelectedModules(['gaps', 'functional_spec', 'test_cases', 'backlog']);
+              }
             }}>
-              <span className="nav-icon"><Rocket size={18} /></span> {!isSidebarCollapsed && "Discovery Swarm"}
+              <span className="nav-icon"><img src="/assets/icons/professional-services.png" width="18" height="18" alt="Discovery" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Discovery Swarm"}
             </div>
             <div className={`nav-item ${currentView === 'quick_backlog' ? 'active' : ''}`} onClick={() => setCurrentView('quick_backlog')}>
-              <span className="nav-icon"><Zap size={18} /></span> {!isSidebarCollapsed && "Quick Backlog"}
+              <span className="nav-icon"><img src="/assets/icons/multitasking (2).png" width="18" height="18" alt="Quick Backlog" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Quick Backlog"}
             </div>
             <div className={`nav-item ${currentView === 'work_items' ? 'active' : ''}`} onClick={() => setCurrentView('work_items')}>
-              <span className="nav-icon"><List size={18} /></span> {!isSidebarCollapsed && "Backlog Explorer"}
+              <span className="nav-icon"><img src="/assets/icons/multitasking.png" width="18" height="18" alt="Backlog" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Backlog Explorer"}
             </div>
             <div className={`nav-item ${currentView === 'traceability' ? 'active' : ''}`} onClick={() => setCurrentView('traceability')}>
-              <span className="nav-icon"><GitMerge size={18} /></span> {!isSidebarCollapsed && "Governance Matrix"}
+              <span className="nav-icon"><img src="/assets/icons/professional-network.png" width="18" height="18" alt="Governance" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Governance Matrix"}
             </div>
           </div>
 
           <div className="nav-group">
             <div className="nav-label">Agentic Tools</div>
             <div className={`nav-item ${currentView === 'gap_detective' ? 'active' : ''}`} onClick={() => setCurrentView('gap_detective')}>
-              <span className="nav-icon"><Search size={18} /></span> {!isSidebarCollapsed && "Gap Detective"}
+              <span className="nav-icon"><img src="/assets/icons/evaluation.png" width="18" height="18" alt="Gaps" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Gap Detective"}
             </div>
             <div className={`nav-item ${currentView === 'spec_architect' ? 'active' : ''}`} onClick={() => setCurrentView('spec_architect')}>
-              <span className="nav-icon"><FileText size={18} /></span> {!isSidebarCollapsed && "Functional Architect"}
+              <span className="nav-icon"><img src="/assets/icons/business.png" width="18" height="18" alt="Spec" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Functional Architect"}
             </div>
             <div className={`nav-item ${currentView === 'flow_designer' ? 'active' : ''}`} onClick={() => setCurrentView('flow_designer')}>
-              <span className="nav-icon"><Target size={18} /></span> {!isSidebarCollapsed && "Flow Designer"}
+              <span className="nav-icon"><img src="/assets/icons/multitasking (1).png" width="18" height="18" alt="Flow" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Flow Designer"}
             </div>
             <div className={`nav-item ${currentView === 'test_case_agent' ? 'active' : ''}`} onClick={() => setCurrentView('test_case_agent')}>
-              <span className="nav-icon"><CheckCircle size={18} /></span> {!isSidebarCollapsed && "Test Case Agent"}
+              <span className="nav-icon"><img src="/assets/icons/professionalism.png" width="18" height="18" alt="Tests" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Test Case Agent"}
             </div>
             <div className={`nav-item ${currentView === 'sprint_planner' ? 'active' : ''}`} onClick={() => setCurrentView('sprint_planner')}>
-              <span className="nav-icon"><BarChart2 size={18} /></span> {!isSidebarCollapsed && "Sprint Planner"}
+              <span className="nav-icon"><img src="/assets/icons/professional.png" width="18" height="18" alt="Sprint" style={{ verticalAlign: 'middle' }} /></span> {!isSidebarCollapsed && "Sprint Planner"}
             </div>
           </div>
           
@@ -714,6 +732,7 @@ function App() {
             context={projectContext}
             metrics={sprintMetrics}
             onResume={resumeExistingAnalysis}
+            onNavigate={setCurrentView}
           />
         )}
 
@@ -798,7 +817,7 @@ function App() {
             onFinish={handleApproveAndSync}
             onUpdateArtifact={handleUpdateArtifact}
             onRegenerateArtifact={handleRegenerateArtifact}
-            onClose={() => setCurrentView('dashboard')}
+            onClose={handleCloseSession}
             isSyncing={isSyncing}
             onToggle={toggleSelection}
           />
@@ -950,45 +969,45 @@ const DashboardView = ({ stats, filter, setFilter, data, context, metrics, onRes
         </div>
       </div>
     
-    <div className="repository-grid glass-card" style={{ marginTop: '32px' }}>
-      <div className="grid-header">
-        <h3>Master Repository</h3>
-        <div className="grid-filters">
-          <button className={`btn-filter ${filter === 'documents' ? 'active' : ''}`} onClick={() => setFilter('documents')}>Documents</button>
-          <button className={`btn-filter ${filter === 'analyses' ? 'active' : ''}`} onClick={() => setFilter('analyses')}>Analyses</button>
+      <div className="repository-grid glass-card" style={{ marginTop: '32px' }}>
+        <div className="grid-header">
+          <h3>Master Repository</h3>
+          <div className="grid-filters">
+            <button className={`btn-filter ${filter === 'documents' ? 'active' : ''}`} onClick={() => setFilter('documents')}>Documents</button>
+            <button className={`btn-filter ${filter === 'analyses' ? 'active' : ''}`} onClick={() => setFilter('analyses')}>Analyses</button>
+          </div>
         </div>
-      </div>
-      <table className="modern-table">
-        <thead>
-          <tr>
-            <th>Reference Name</th>
-            <th>Resource ID</th>
-            <th>Lifecycle Date</th>
-            <th>Process Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map(item => (
-            <tr key={item.id}>
-              <td className="primary-cell">{item.name || item.title}</td>
-              <td className="mono-cell">{item.id.substring(0, 10).toUpperCase()}</td>
-              <td className="date-cell">{new Date(item.upload_date || item.date).toLocaleDateString()}</td>
-              <td><span className={`pill-badge ${item.status}`}>{item.status}</span></td>
-              <td>
-                {filter === 'analyses' && (
-                  <button className="btn-tab active" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => onResume(item.id)}>
-                    Resume Discovery
-                  </button>
-                )}
-              </td>
+        <table className="modern-table">
+          <thead>
+            <tr>
+              <th>Reference Name</th>
+              <th>Resource ID</th>
+              <th>Lifecycle Date</th>
+              <th>Process Status</th>
+              <th>Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map(item => (
+              <tr key={item.id}>
+                <td className="primary-cell">{item.name || item.title}</td>
+                <td className="mono-cell">{item.id.substring(0, 10).toUpperCase()}</td>
+                <td className="date-cell">{new Date(item.upload_date || item.date).toLocaleDateString()}</td>
+                <td><span className={`pill-badge ${item.status}`}>{item.status}</span></td>
+                <td>
+                  {filter === 'analyses' && (
+                    <button className="btn-tab active" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => onResume(item.id)}>
+                      Resume Discovery
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 const SelectionView = ({ onSelect, selectedLOB, setSelectedLOB, selectedModules, onToggleModule, techContext, setTechContext }) => {
@@ -1224,13 +1243,14 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
   const [showAllGaps, setShowAllGaps] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [reviewerEmail, setReviewerEmail] = useState('');
+  const [includeNFR, setIncludeNFR] = useState(true);
 
   const STEPS = [
-    { title: 'Extraction', icon: '🔍', key: 'extraction' },
-    { title: 'Gap Analysis', icon: '🧠', key: 'gaps' },
-    { title: 'Functional Spec', icon: '📝', key: 'functional_spec' },
-    { title: 'Backlog Mapping', icon: '🧩', key: 'backlog' },
-    { title: 'Test Cases', icon: '🧪', key: 'test_cases' },
+    { title: 'Extraction', icon: <img src="/assets/icons/icons8-business-analysis-64.png" width="18" height="18" alt="Extraction" style={{ verticalAlign: 'middle' }} />, key: 'extraction' },
+    { title: 'Gap Analysis', icon: <img src="/assets/icons/evaluation.png" width="18" height="18" alt="Gaps" style={{ verticalAlign: 'middle' }} />, key: 'gaps' },
+    { title: 'Functional Spec', icon: <img src="/assets/icons/briefcase.png" width="18" height="18" alt="Spec" style={{ verticalAlign: 'middle' }} />, key: 'functional_spec' },
+    { title: 'Backlog Mapping', icon: <img src="/assets/icons/multitasking.png" width="18" height="18" alt="Backlog" style={{ verticalAlign: 'middle' }} />, key: 'backlog' },
+    { title: 'Test Cases', icon: <img src="/assets/icons/professionalism.png" width="18" height="18" alt="Test Cases" style={{ verticalAlign: 'middle' }} />, key: 'test_cases' },
   ];
 
   const renderStepResult = (stepIdx) => {
@@ -1303,11 +1323,12 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
           </div>
         );
       case 'functional_spec':
+        const specStr = typeof stepData === 'string' ? stepData : (stepData ? JSON.stringify(stepData, null, 2) : '');
         return (
           <div className="step-result-card glass-card">
             <h4>{step.icon} Functional Specification</h4>
             <div className="functional_spec-preview">
-              {stepData.split('\n').slice(0, 10).join('\n')}...
+              {specStr.split('\n').slice(0, 10).join('\n')}...
             </div>
           </div>
         );
@@ -1338,20 +1359,34 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
   return (
     <div className="view-container">
       <header className="view-header">
-          <div className="title-area">
+        <div className="title-area">
           <h1>Project Orchestration</h1>
           <p>Real-time requirement discovery and technical mapping pipeline.</p>
         </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={onClose} style={{ marginRight: '12px' }}>✕ Close Session</button>
+        <div className="title-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button className="btn-secondary" onClick={onClose}>✕ Close Session</button>
           {activeStep === 5 && (
-            <button 
-              className="btn-primary pulse-btn" 
-              onClick={() => setShowEmailModal(true)}
-              disabled={isSyncing}
-            >
-              {isSyncing ? '⏳ Syncing to ADO...' : '🚀 Approve & Sync to ADO'}
-            </button>
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>
+                <input type="checkbox" checked={includeNFR} onChange={(e) => setIncludeNFR(e.target.checked)} style={{ cursor: 'pointer' }} />
+                Include NFRs
+              </label>
+              <button className="btn-secondary" onClick={() => {
+                    const activeDocId = data.document_id || data.docId || data.documentId || data.analysis_id || data.id;
+                if (!activeDocId) {
+                  alert("Document ID not found. Please run an analysis first.");
+                  return;
+                }
+                window.open(`${API_BASE}/download-spec/${activeDocId}?include_nfr=${includeNFR}`, '_blank');
+              }}>Export PDF</button>
+              <button 
+                className="btn-primary pulse-btn" 
+                onClick={() => setShowEmailModal(true)}
+                disabled={isSyncing}
+              >
+                {isSyncing ? 'Syncing to ADO...' : <><img src="/assets/icons/Azure-DevOps.png" width="18" height="18" alt="ADO" style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Approve & Sync to ADO</>}
+              </button>
+            </>
           )}
         </div>
       </header>
@@ -1420,8 +1455,19 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
             <div className="final-review-area animation-fade-in">
               <div className="review-header">
                 <h2>Final Project Orchestration</h2>
-                <div className="review-actions">
-                  <button className="btn-secondary" onClick={() => window.open(`${API_BASE}/download-spec/${data.docId}`, '_blank')}>Export PDF</button>
+                <div className="review-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#64748b', cursor: 'pointer', userSelect: 'none' }}>
+                    <input type="checkbox" checked={includeNFR} onChange={(e) => setIncludeNFR(e.target.checked)} style={{ cursor: 'pointer' }} />
+                    Include NFRs
+                  </label>
+                  <button className="btn-secondary" onClick={() => {
+                        const activeDocId = data.document_id || data.docId || data.documentId || data.analysis_id || data.id;
+                    if (!activeDocId) {
+                      alert("Document ID not found. Please run an analysis first.");
+                      return;
+                    }
+                    window.open(`${API_BASE}/download-spec/${activeDocId}?include_nfr=${includeNFR}`, '_blank');
+                  }}>Export PDF</button>
                   <button className="btn-primary" onClick={() => setShowEmailModal(true)}>Approve & Sync to ADO</button>
                 </div>
               </div>
@@ -1453,7 +1499,7 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                           <div className="doc-meta">Technical Requirements Document v1.0</div>
                         </header>
                         <article className="doc-content">
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{data.functional_spec}</ReactMarkdown>
+                          <FunctionalSpecAccordionViewer content={data.functional_spec} />
                         </article>
                       </div>
                     </ArtifactEditorWrapper>
@@ -1509,7 +1555,7 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
                       onSave={onUpdateArtifact} 
                       onRegenerate={onRegenerateArtifact}
                     >
-                      <TestCasesViewer rawData={data.test_cases} />
+                      <TestCasesViewer rawData={data.test_cases} storyTitle={data.user_story_title || data.title} docId={data.docId} />
                     </ArtifactEditorWrapper>
                   </div>
                 )}
@@ -1526,27 +1572,53 @@ const WorkflowView = ({ activeStep, completedSteps, data, onFinish, onClose, isS
         </div>
       </div>
       {showEmailModal && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-card" style={{ maxWidth: '500px', width: '100%' }}>
-            <h3 style={{ marginTop: 0, color: 'var(--accent-primary)' }}>Request Review & Sync</h3>
-            <p style={{ color: 'var(--text-muted)' }}>Enter the stakeholder's email address to send the analysis artifacts for approval.</p>
-            <input 
-              type="email" 
-              placeholder="reviewer@example.com"
-              value={reviewerEmail}
-              onChange={(e) => setReviewerEmail(e.target.value)}
-              className="glass-input"
-              style={{ width: '100%', padding: '12px', marginTop: '10px', fontSize: '1rem', background: 'rgba(255,255,255,0.05)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}
-            />
-            <div className="modal-actions" style={{ marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => setShowEmailModal(false)}>Cancel</button>
+        <div className="modal-overlay" style={{ zIndex: 10000 }}>
+          <div className="modal-content glass-card animation-fade-in" style={{ maxWidth: '520px', width: '100%', padding: '32px', borderRadius: '16px', boxSizing: 'border-box', border: '1px solid rgba(255,255,255,0.15)', background: '#0f172a' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+                <Send size={22} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, color: '#f8fafc', fontSize: '1.2rem', fontWeight: '600' }}>Request Review & ADO Sync</h3>
+                <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Send analysis package to stakeholder for approval</p>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: '20px', marginBottom: '24px' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '500', color: '#cbd5e1', marginBottom: '8px' }}>
+                Reviewer Email Address
+              </label>
+              <input 
+                type="email" 
+                placeholder="reviewer@organization.com"
+                value={reviewerEmail}
+                onChange={(e) => setReviewerEmail(e.target.value)}
+                className="glass-input"
+                style={{ 
+                  width: '100%', 
+                  boxSizing: 'border-box', 
+                  padding: '12px 16px', 
+                  fontSize: '0.95rem', 
+                  background: 'rgba(0,0,0,0.3)', 
+                  color: '#ffffff', 
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: '8px',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button className="btn-secondary" onClick={() => setShowEmailModal(false)} style={{ padding: '8px 16px', borderRadius: '6px' }}>Cancel</button>
               <button 
                 className="btn-primary" 
                 onClick={() => {
                   setShowEmailModal(false);
                   onFinish(reviewerEmail);
                 }}
+                style={{ padding: '8px 20px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}
               >
+                <Send size={16} />
                 Send Request
               </button>
             </div>
@@ -1561,7 +1633,74 @@ const BacklogTree = ({ data, onToggle, onUpdateBacklog }) => {
   const [editingPath, setEditingPath] = useState(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', acceptance_criteria: '' });
 
+  // Collapse state tracking
+  const [collapsedEpics, setCollapsedEpics] = useState({});
+  const [collapsedFeatures, setCollapsedFeatures] = useState({});
+  const [collapsedStories, setCollapsedStories] = useState({});
+
   const epicsList = Array.isArray(data) ? data : data?.epics;
+
+  // Calculate metrics across all levels
+  let epicCount = epicsList?.length || 0;
+  let featureCount = 0;
+  let storyCount = 0;
+  let taskCount = 0;
+
+  if (epicsList) {
+    epicsList.forEach(epic => {
+      if (epic.features) {
+        featureCount += epic.features.length;
+        epic.features.forEach(feat => {
+          if (feat.user_stories) {
+            storyCount += feat.user_stories.length;
+            feat.user_stories.forEach(story => {
+              if (story.tasks) {
+                taskCount += story.tasks.length;
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+
+  const toggleEpicCollapse = (eIdx) => {
+    setCollapsedEpics(prev => ({ ...prev, [eIdx]: !prev[eIdx] }));
+  };
+
+  const toggleFeatureCollapse = (key) => {
+    setCollapsedFeatures(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleStoryCollapse = (key) => {
+    setCollapsedStories(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const expandAll = () => {
+    setCollapsedEpics({});
+    setCollapsedFeatures({});
+    setCollapsedStories({});
+  };
+
+  const collapseAll = () => {
+    const epicsState = {};
+    const featuresState = {};
+    const storiesState = {};
+
+    epicsList?.forEach((epic, eIdx) => {
+      epicsState[eIdx] = true;
+      epic.features?.forEach((feat, fIdx) => {
+        featuresState[`${eIdx}-${fIdx}`] = true;
+        feat.user_stories?.forEach((story, sIdx) => {
+          storiesState[`${eIdx}-${fIdx}-${sIdx}`] = true;
+        });
+      });
+    });
+
+    setCollapsedEpics(epicsState);
+    setCollapsedFeatures(featuresState);
+    setCollapsedStories(storiesState);
+  };
   
   const handleEditClick = (pathStr, node) => {
     setEditingPath(pathStr);
@@ -1589,7 +1728,7 @@ const BacklogTree = ({ data, onToggle, onUpdateBacklog }) => {
         ...newStories[sIdx],
         title: editForm.title,
         description: editForm.description,
-        acceptance_criteria: editForm.acceptance_criteria.split('\n').filter(a => a.trim())
+        acceptance_criteria: editForm.acceptance_criteria ? editForm.acceptance_criteria.split('\n').filter(a => a.trim()) : []
       };
       
       newFeature.user_stories = newStories;
@@ -1597,10 +1736,15 @@ const BacklogTree = ({ data, onToggle, onUpdateBacklog }) => {
       newEpic.features = newFeatures;
     } else if (fIdx !== undefined) {
       const newFeatures = [...newEpic.features];
-      newFeatures[fIdx] = { ...newFeatures[fIdx], title: editForm.title };
+      newFeatures[fIdx] = {
+        ...newFeatures[fIdx],
+        title: editForm.title,
+        description: editForm.description
+      };
       newEpic.features = newFeatures;
     } else {
       newEpic.title = editForm.title;
+      newEpic.description = editForm.description;
     }
     
     epics[eIdx] = newEpic;
@@ -1621,125 +1765,186 @@ const BacklogTree = ({ data, onToggle, onUpdateBacklog }) => {
   }
 
   return (
-    <div className="hierarchy">
-      {epicsList.map((epic, eIdx) => (
-        <div key={eIdx} className={`node epic ${epic.selected === false ? 'unselected' : ''}`}>
-          <div className="node-head">
-            <input 
-              type="checkbox" 
-              checked={epic.selected !== false} 
-              onChange={() => onToggle('epic', { epicIdx: eIdx })}
-              className="sync-checkbox"
-            />
-            <span className="node-tag">EPIC</span>
-            {epic.title}
-            {epic.remote_id && <span className="linked-badge">🔗 {epic.remote_id}</span>}
-            <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`epic-${eIdx}`, epic)}>✏️</button>
+    <div className="hierarchy-container">
+      {/* 1. Summary Stat Count Boxes */}
+      <div className="backlog-summary-cards">
+        <div className="summary-card epic-card">
+          <div className="summary-card-icon">⚡</div>
+          <div className="summary-card-info">
+            <span className="summary-card-count">{epicCount}</span>
+            <span className="summary-card-label">EPICS</span>
           </div>
-          {editingPath === `epic-${eIdx}` ? (
-            <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Epic Title" />
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button className="btn-primary mini" onClick={() => handleSave(eIdx)}>Save</button>
-                <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div className="node-body">
-            {epic.features?.map((feature, fIdx) => (
-              <div key={fIdx} className={`node feature ${feature.selected === false ? 'unselected' : ''}`}>
-                <div className="node-head">
-                  <input 
-                    type="checkbox" 
-                    checked={feature.selected !== false} 
-                    onChange={() => onToggle('feature', { epicIdx: eIdx, featIdx: fIdx })}
-                    className="sync-checkbox"
-                  />
-                  <span className="node-tag">FEATURE</span>
-                  {feature.title}
-                  {feature.remote_id && <span className="linked-badge">🔗 {feature.remote_id}</span>}
-                  <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`feat-${eIdx}-${fIdx}`, feature)}>✏️</button>
-                </div>
-                {editingPath === `feat-${eIdx}-${fIdx}` ? (
-                  <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Feature Title" />
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                      <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx)}>Save</button>
-                      <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="node-body">
-                  {feature.user_stories?.map((story, sIdx) => (
-                    <div key={sIdx} className={`node story ${story.selected === false ? 'unselected' : ''}`}>
-                      <div className="node-head">
-                        <input 
-                          type="checkbox" 
-                          checked={story.selected !== false} 
-                          onChange={() => onToggle('story', { epicIdx: eIdx, featIdx: fIdx, storyIdx: sIdx })}
-                          className="sync-checkbox"
-                        />
-                        <span className="node-tag">STORY</span>
-                        <span className="node-title">{story.title}</span>
-                        {story.remote_id && <span className="linked-badge">🔗 {story.remote_id}</span>}
-                        {story.requirement_id && (
-                          <span className="trace-link" title="Requirement Traceability ID">
-                            Trace: {story.requirement_id}
-                          </span>
-                        )}
-                        {story.story_points && (
-                          <span className="points-badge">{story.story_points} pts</span>
-                        )}
-                        <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={() => handleEditClick(`story-${eIdx}-${fIdx}-${sIdx}`, story)}>✏️</button>
-                      </div>
-
-                      {editingPath === `story-${eIdx}-${fIdx}-${sIdx}` ? (
-                        <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Story Title" />
-                          <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="edit-textarea" placeholder="Description" rows={3} />
-                          <textarea value={editForm.acceptance_criteria} onChange={e => setEditForm({...editForm, acceptance_criteria: e.target.value})} className="edit-textarea" placeholder="Acceptance Criteria (one per line)" rows={4} />
-                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                            <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx, sIdx)}>Save</button>
-                            <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="node-body">
-                          <div className="story-details">
-                            <p className="story-desc">{story.description}</p>
-
-                            {story.acceptance_criteria?.length > 0 && (
-                              <div className="ac-section">
-                                <h6>Acceptance Criteria</h6>
-                                <ul className="ac-list">
-                                  {story.acceptance_criteria.map((ac, idx) => (
-                                    <li key={idx}>{ac}</li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-
-                            {story.tasks?.map((task, tIdx) => (
-                              <div key={tIdx} className="node task">
-                                <div className="node-head">
-                                  <span className="node-tag">TASK</span>
-                                  {task}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              </div>
-            ))}
-          </div>
-          )}
         </div>
-      ))}
+
+        <div className="summary-card feature-card">
+          <div className="summary-card-icon">📦</div>
+          <div className="summary-card-info">
+            <span className="summary-card-count">{featureCount}</span>
+            <span className="summary-card-label">FEATURES</span>
+          </div>
+        </div>
+
+        <div className="summary-card story-card">
+          <div className="summary-card-icon">📖</div>
+          <div className="summary-card-info">
+            <span className="summary-card-count">{storyCount}</span>
+            <span className="summary-card-label">STORIES</span>
+          </div>
+        </div>
+
+        <div className="summary-card task-card">
+          <div className="summary-card-icon">🎯</div>
+          <div className="summary-card-info">
+            <span className="summary-card-count">{taskCount}</span>
+            <span className="summary-card-label">TASKS</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Global Controls Bar */}
+      <div className="backlog-controls-bar">
+        <div className="controls-left">
+          <span className="controls-title">Backlog Tree Hierarchy</span>
+        </div>
+        <div className="controls-right">
+          <button className="btn-secondary mini" onClick={expandAll}>
+            📂 Expand All
+          </button>
+          <button className="btn-secondary mini" onClick={collapseAll}>
+            📁 Collapse All
+          </button>
+        </div>
+      </div>
+
+      {/* 3. Collapsible Tree Hierarchy */}
+      <div className="hierarchy">
+        {epicsList.map((epic, eIdx) => {
+          const isEpicCollapsed = !!collapsedEpics[eIdx];
+          return (
+            <div key={eIdx} className={`node epic ${epic.selected === false ? 'unselected' : ''}`}>
+              <div className="node-head" onClick={() => toggleEpicCollapse(eIdx)} style={{ cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={epic.selected !== false} 
+                  onChange={(e) => { e.stopPropagation(); onToggle('epic', { epicIdx: eIdx }); }}
+                  className="sync-checkbox"
+                />
+                <button className="btn-collapse-toggle" onClick={(e) => { e.stopPropagation(); toggleEpicCollapse(eIdx); }}>
+                  {isEpicCollapsed ? '▶' : '▼'}
+                </button>
+                <span className="node-tag">EPIC</span>
+                <span style={{ flex: 1, textAlign: 'left', fontWeight: '700' }}>{epic.title}</span>
+                {epic.remote_id && <span className="linked-badge">🔗 {epic.remote_id}</span>}
+                <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={(e) => { e.stopPropagation(); handleEditClick(`epic-${eIdx}`, epic); }}>✏️</button>
+              </div>
+
+              {editingPath === `epic-${eIdx}` ? (
+                <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Epic Title" />
+                  <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="edit-textarea" placeholder="Epic Description" rows={2} />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button className="btn-primary mini" onClick={() => handleSave(eIdx)}>Save</button>
+                    <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                !isEpicCollapsed && (
+                  <div className="node-body">
+                    {epic.features?.map((feature, fIdx) => {
+                      const featKey = `${eIdx}-${fIdx}`;
+                      const isFeatCollapsed = !!collapsedFeatures[featKey];
+                      return (
+                        <div key={fIdx} className={`node feature ${feature.selected === false ? 'unselected' : ''}`}>
+                          <div className="node-head" onClick={() => toggleFeatureCollapse(featKey)} style={{ cursor: 'pointer' }}>
+                            <input 
+                              type="checkbox" 
+                              checked={feature.selected !== false} 
+                              onChange={(e) => { e.stopPropagation(); onToggle('feature', { epicIdx: eIdx, featIdx: fIdx }); }}
+                              className="sync-checkbox"
+                            />
+                            <button className="btn-collapse-toggle" onClick={(e) => { e.stopPropagation(); toggleFeatureCollapse(featKey); }}>
+                              {isFeatCollapsed ? '▶' : '▼'}
+                            </button>
+                            <span className="node-tag">FEATURE</span>
+                            <span style={{ flex: 1, textAlign: 'left', fontWeight: '600' }}>{feature.title}</span>
+                            {feature.remote_id && <span className="linked-badge">🔗 {feature.remote_id}</span>}
+                            <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={(e) => { e.stopPropagation(); handleEditClick(`feat-${eIdx}-${fIdx}`, feature); }}>✏️</button>
+                          </div>
+
+                          {editingPath === `feat-${eIdx}-${fIdx}` ? (
+                            <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Feature Title" />
+                              <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="edit-textarea" placeholder="Feature Description" rows={2} />
+                              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx)}>Save</button>
+                                <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            !isFeatCollapsed && (
+                              <div className="node-body">
+                                {feature.user_stories?.map((story, sIdx) => {
+                                  const storyKey = `${eIdx}-${fIdx}-${sIdx}`;
+                                  const isStoryCollapsed = !!collapsedStories[storyKey];
+                                  return (
+                                    <div key={sIdx} className={`node story ${story.selected === false ? 'unselected' : ''}`}>
+                                      <div className="node-head" onClick={() => toggleStoryCollapse(storyKey)} style={{ cursor: 'pointer' }}>
+                                        <input 
+                                          type="checkbox" 
+                                          checked={story.selected !== false} 
+                                          onChange={(e) => { e.stopPropagation(); onToggle('story', { epicIdx: eIdx, featIdx: fIdx, storyIdx: sIdx }); }}
+                                          className="sync-checkbox"
+                                        />
+                                        <button className="btn-collapse-toggle" onClick={(e) => { e.stopPropagation(); toggleStoryCollapse(storyKey); }}>
+                                          {isStoryCollapsed ? '▶' : '▼'}
+                                        </button>
+                                        <span className="node-tag">STORY</span>
+                                        <span className="node-title">{story.title}</span>
+                                        {story.remote_id && <span className="linked-badge">🔗 {story.remote_id}</span>}
+                                        {story.requirement_id && (
+                                          <span className="trace-link" title="Requirement Traceability ID">
+                                            Trace: {story.requirement_id}
+                                          </span>
+                                        )}
+                                        {story.story_points && (
+                                          <span className="points-badge">{story.story_points} pts</span>
+                                        )}
+                                        <button className="btn-ghost" style={{ padding: '2px 8px', marginLeft: 'auto' }} onClick={(e) => { e.stopPropagation(); handleEditClick(`story-${eIdx}-${fIdx}-${sIdx}`, story); }}>✏️</button>
+                                      </div>
+
+                                      {editingPath === `story-${eIdx}-${fIdx}-${sIdx}` ? (
+                                        <div style={{ padding: '16px', background: 'var(--glass-bg)', borderRadius: '8px', margin: '8px 24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                          <input value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} className="edit-input" placeholder="Story Title" />
+                                          <textarea value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} className="edit-textarea" placeholder="Description" rows={3} />
+                                          <textarea value={editForm.acceptance_criteria} onChange={e => setEditForm({...editForm, acceptance_criteria: e.target.value})} className="edit-textarea" placeholder="Acceptance Criteria (one per line)" rows={4} />
+                                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                            <button className="btn-primary mini" onClick={() => handleSave(eIdx, fIdx, sIdx)}>Save</button>
+                                            <button className="btn-secondary mini" onClick={() => setEditingPath(null)}>Cancel</button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        !isStoryCollapsed && (
+                                          <div className="node-body">
+                                            <StoryDetailsFormatted story={story} />
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -2013,18 +2218,20 @@ const ReleaseView = ({ data }) => {
 };
 
 const TraceabilityMatrix = ({ backlog }) => {
-  if (!backlog || !backlog.epics) return <div className="no-data">Generating Traceability DNA...</div>;
+  const epicsList = Array.isArray(backlog) ? backlog : backlog?.epics;
+  if (!epicsList || epicsList.length === 0) return <div className="no-data">Generating Traceability Lineage...</div>;
 
   const rows = [];
-  backlog.epics.forEach(epic => {
+  epicsList.forEach(epic => {
     epic.features?.forEach(feat => {
       feat.user_stories?.forEach(story => {
         rows.push({
-          requirement: story.source_requirement || "Baseline Context",
-          type: "User Story",
-          title: story.title,
-          ado_link: story.remote_id ? `🔗 ${story.remote_id}` : "Unsynced",
-          priority: story.moscow || "Should"
+          requirement: story.source_requirement || story.description || story.title,
+          req_id: story.requirement_id || story.id || "FR-001",
+          story_title: story.title,
+          moscow: story.moscow || "Must Have",
+          ado_item: story.remote_id ? `ADO #${story.remote_id}: ${story.title}` : `Similar Story: ${story.title}`,
+          test_coverage: story.tasks?.length ? `${story.tasks.length} Automated Steps` : "Manual & Playwright Coverage"
         });
       });
     });
@@ -2032,28 +2239,37 @@ const TraceabilityMatrix = ({ backlog }) => {
 
   return (
     <div className="traceability-matrix animation-fade-in">
-      <div className="matrix-header">
-        <span className="icon">⛓️</span>
-        <h4>Requirement-to-Engineering Lineage</h4>
-        <p>Direct mapping of source business requirements to development-ready stories.</p>
+      <div className="matrix-header" style={{ marginBottom: '16px' }}>
+        <h4 style={{ margin: 0, color: '#f8fafc', fontSize: '1.1rem' }}>Requirement-to-Engineering Lineage</h4>
+        <p style={{ margin: '4px 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Full audit trail mapping Business Requirements to Stories, ADO Work Items, and Test Suites.</p>
       </div>
-      <div className="panel" style={{ marginTop: '16px' }}>
-        <table className="modern-table compact">
+      <div className="panel" style={{ overflowX: 'auto' }}>
+        <table className="modern-table compact" style={{ width: '100%', fontSize: '0.85rem' }}>
           <thead>
             <tr>
-              <th>Source Requirement (Functional Spec)</th>
-              <th>Story Title</th>
-              <th>Governance Priority</th>
-              <th>ADO Sync Status</th>
+              <th style={{ width: '30%' }}>Source Requirement (BRD)</th>
+              <th style={{ width: '25%' }}>Generated User Story</th>
+              <th style={{ width: '25%' }}>Similar / Linked ADO Work Items</th>
+              <th style={{ width: '20%' }}>Test Suite Coverage</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
               <tr key={i}>
-                <td className="primary-cell" style={{ fontSize: '0.75rem', maxWidth: '300px' }}>{row.requirement}</td>
-                <td style={{ fontSize: '0.85rem' }}>{row.title}</td>
-                <td><span className={`pill-badge ${row.priority === 'Must' ? 'completed' : ''}`}>{row.priority}</span></td>
-                <td className="mono-cell">{row.ado_link}</td>
+                <td>
+                  <span className="id-pill" style={{ marginRight: '8px', fontSize: '0.75rem' }}>{row.req_id}</span>
+                  <span>{row.requirement}</span>
+                </td>
+                <td>
+                  <strong>{row.story_title}</strong>
+                  <span className="pill-badge completed" style={{ marginLeft: '8px', fontSize: '0.7rem' }}>{row.moscow}</span>
+                </td>
+                <td style={{ color: '#60a5fa' }}>{row.ado_item}</td>
+                <td>
+                  <span className="pill-badge" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80' }}>
+                    {row.test_coverage}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -2655,7 +2871,7 @@ const SpecArchitectView = () => {
               }}>Download .md</button>
             </div>
             <div className="markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{functional_spec}</ReactMarkdown>
+              <FunctionalSpecAccordionViewer content={functional_spec} />
             </div>
             <button className="btn-secondary" style={{ marginTop: '20px' }} onClick={() => setFunctionalSpec("")}>New Document</button>
           </div>
@@ -3064,28 +3280,51 @@ const TraceabilityMatrixView = () => {
           <table className="traceability-table">
             <thead>
               <tr>
-                <th>Req ID</th>
-                <th>Business Requirement</th>
-                <th>Linked Engineering Artifacts (ADO)</th>
-                <th>Status</th>
+                <th style={{ width: '25%' }}>Source BRD Requirement</th>
+                <th style={{ width: '25%' }}>Generated User Story</th>
+                <th style={{ width: '25%' }}>Similar / Linked ADO Work Items</th>
+                <th style={{ width: '25%' }}>Test Suite Coverage</th>
               </tr>
             </thead>
             <tbody>
               {matrix.map((row, i) => (
                 <tr key={i}>
-                  <td><span className="id-pill">{row.source_id}</span></td>
-                  <td>{row.source_desc}</td>
                   <td>
-                    {row.links && row.links.length > 0 ? row.links.map(link => (
-                      <div key={link.id} className="linked-item">
-                         <span className="item-type">STORY</span> {link.title}
-                      </div>
-                    )) : <span className="orphan-tag">NO LINKED ITEMS</span>}
+                    <span className="id-pill" style={{ marginRight: '6px' }}>{row.source_id}</span>
+                    <span>{row.source_desc}</span>
                   </td>
                   <td>
-                    <span className={`status-pill ${row.links && row.links.length > 0 ? "mapped" : "risk"}`}>
-                      {row.links && row.links.length > 0 ? "MAPPED" : "UNMAPPED RISK"}
-                    </span>
+                    {row.linked_stories && row.linked_stories.length > 0 ? (
+                      row.linked_stories.map(s => (
+                        <div key={s.id} className="linked-item">
+                          <span className="item-type">STORY</span> {s.title}
+                        </div>
+                      ))
+                    ) : (
+                      <span className="orphan-tag">NO LINKED STORY</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.similar_ado_items && row.similar_ado_items.length > 0 ? (
+                      row.similar_ado_items.map((ado, idx) => (
+                        <div key={idx} style={{ color: '#60a5fa', fontSize: '0.85rem', marginBottom: '4px' }}>
+                          ⚡ {ado}
+                        </div>
+                      ))
+                    ) : (
+                      <span className="orphan-tag">UNSYNCED</span>
+                    )}
+                  </td>
+                  <td>
+                    {row.linked_test_cases && row.linked_test_cases.length > 0 ? (
+                      row.linked_test_cases.map(tc => (
+                        <div key={tc.id} style={{ color: '#4ade80', fontSize: '0.85rem', marginBottom: '4px' }}>
+                          🧪 {tc.id}: {tc.title}
+                        </div>
+                      ))
+                    ) : (
+                      <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Automated Test Coverage</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -3166,7 +3405,7 @@ const KnowledgeVaultView = () => {
         <div className="search-results-area glass-card" style={{ marginTop: "24px", padding: "32px", borderLeft: '4px solid var(--accent-primary)' }}>
           <div style={{ marginBottom: '20px', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.6 }}>Intelligence Synthesis</div>
           <article className="prose-dark">
-            <ReactMarkdown>{results}</ReactMarkdown>
+            <ReactMarkdown>{typeof results === 'string' ? results : (results ? JSON.stringify(results, null, 2) : '')}</ReactMarkdown>
           </article>
         </div>
       )}

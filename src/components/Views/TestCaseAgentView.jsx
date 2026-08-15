@@ -170,7 +170,7 @@ const TestCaseAgentView = () => {
                                 {testCasesMarkdown ? (
                                     <>
                                         <div style={{ flex: 1, paddingBottom: '20px' }}>
-                                            <TestCasesViewer rawData={testCasesMarkdown} />
+                                            <TestCasesViewer rawData={testCasesMarkdown} storyTitle={selectedItem?.title} />
                                         </div>
                                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
                                             {syncSuccess ? (

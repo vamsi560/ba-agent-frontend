@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UploadCloud, CheckCircle, FileText, Loader2, ListTree, Code2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import StoryDetailsFormatted from '../StoryDetailsFormatted';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || (
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -81,12 +82,12 @@ const CollapsibleFeature = ({ feat, epicIndex, featIndex, epicsList, onToggleSel
           {feat.user_stories?.map((story, i) => {
             const isStorySelected = story.selected !== false;
             return (
-            <div key={story.id || i} className="story-node" style={{ padding: '12px', background: 'rgba(15,23,42,0.8)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', opacity: isStorySelected ? 1 : 0.5 }}>
+            <div key={story.id || i} className="story-node" style={{ padding: '12px', background: '#FFFFFF', border: '1px solid #CCFBF1', borderRadius: '8px', fontSize: '0.85rem', opacity: isStorySelected ? 1 : 0.5, boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <input type="checkbox" checked={isStorySelected} onChange={() => onToggleSelect(story)} style={{ width: '14px', height: '14px', cursor: 'pointer' }} title="Include in ADO Sync" />
-                    <span style={{ background: 'rgba(16,185,129,0.2)', color: '#34d399', border: '1px solid #10b981', padding: '2px 6px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 'bold' }}>STORY</span>
-                    <span style={{ fontWeight: '500', color: '#cbd5e1', fontSize: '0.95rem' }}>{story.title}</span>
+                    <span style={{ background: 'rgba(16,185,129,0.2)', color: '#059669', border: '1px solid #10b981', padding: '2px 6px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 'bold' }}>STORY</span>
+                    <span style={{ fontWeight: '600', color: '#0f172a', fontSize: '0.95rem' }}>{story.title}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                     {story.story_points && <span style={{ background: 'rgba(255,255,255,0.1)', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '500' }}>{story.story_points} pts</span>}
@@ -94,13 +95,7 @@ const CollapsibleFeature = ({ feat, epicIndex, featIndex, epicsList, onToggleSel
                     {story.release_phase && <span style={{ background: 'rgba(236,72,153,0.15)', color: '#f472b6', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '500' }}>{story.release_phase}</span>}
                 </div>
               </div>
-              {story.tasks && story.tasks.length > 0 && (
-                <div style={{ marginTop: '12px', paddingLeft: '12px', borderLeft: '1px dashed rgba(255,255,255,0.2)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  {story.tasks.map((task, tIdx) => (
-                    <div key={tIdx} style={{ color: '#94a3b8' }}>└ Task: {task.title || task}</div>
-                  ))}
-                </div>
-              )}
+              <StoryDetailsFormatted story={story} />
             </div>
             );
           })}
@@ -214,7 +209,7 @@ const DirectBacklogView = () => {
 
             const data = await response.json();
             setPublishSuccess(true);
-            alert(`Success! Synchronized ${data.created_items?.length || 0} work items to ${exportTarget === 'jira' ? 'Jira' : 'Azure DevOps'}.`);
+            alert(`Success! Synchronized ${data.created_items?.length || 0} work items to Azure DevOps.`);
         } catch (err) {
             alert(`Publish Error: ${err.message}`);
         } finally {
@@ -315,21 +310,23 @@ const DirectBacklogView = () => {
                         {activeTab === 'backlog' && (
                             <div className="glass-panel" style={{ padding: '2rem', background: 'rgba(15,23,42,0.4)', borderRadius: '16px' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                                    {!result.backlog?.epics ? (
+                                    {!result.backlog?.epics && !result.backlog?.features ? (
                                         <div style={{ color: 'var(--text-secondary)' }}>No backlog data found.</div>
                                     ) : (
                                         <>
                                             {(() => {
-                                                let eCount = 0, fCount = 0, sCount = 0, tCount = 0;
-                                                result.backlog.epics?.forEach(e => {
-                                                  eCount++;
-                                                  e.features?.forEach(f => {
-                                                    fCount++;
+                                                let eCount = result.backlog.epics?.length || 0;
+                                                let fCount = 0, sCount = 0, tCount = 0;
+                                                const featuresToCount = result.backlog.epics 
+                                                    ? result.backlog.epics.flatMap(e => e.features || []) 
+                                                    : (result.backlog.features || []);
+
+                                                fCount = featuresToCount.length;
+                                                featuresToCount.forEach(f => {
                                                     f.user_stories?.forEach(s => {
-                                                      sCount++;
-                                                      if (s.tasks) tCount += s.tasks.length;
+                                                        sCount++;
+                                                        if (s.tasks) tCount += s.tasks.length;
                                                     });
-                                                  });
                                                 });
                                                 
                                                 return (
@@ -355,16 +352,30 @@ const DirectBacklogView = () => {
                                             })()}
 
                                             <div className="backlog-explorer" style={{ maxHeight: '600px', overflowY: 'auto', paddingRight: '12px' }}>
-                                                {result.backlog.epics.map((epic, i) => (
-                                                    <CollapsibleEpic 
-                                                        key={epic.id || i} 
-                                                        epic={epic} 
-                                                        epicIndex={i} 
-                                                        epicsList={result.backlog.epics} 
-                                                        onToggleSelect={handleToggleSelect} 
-                                                        onMoveFeature={handleMoveFeature} 
-                                                    />
-                                                ))}
+                                                {result.backlog.epics ? (
+                                                    result.backlog.epics.map((epic, i) => (
+                                                        <CollapsibleEpic 
+                                                            key={epic.id || i} 
+                                                            epic={epic} 
+                                                            epicIndex={i} 
+                                                            epicsList={result.backlog.epics} 
+                                                            onToggleSelect={handleToggleSelect} 
+                                                            onMoveFeature={handleMoveFeature} 
+                                                        />
+                                                    ))
+                                                ) : (
+                                                    result.backlog.features?.map((feat, i) => (
+                                                        <CollapsibleFeature 
+                                                            key={feat.id || i} 
+                                                            feat={feat} 
+                                                            epicIndex={0} 
+                                                            featIndex={i} 
+                                                            epicsList={[]} 
+                                                            onToggleSelect={handleToggleSelect} 
+                                                            onMoveFeature={handleMoveFeature} 
+                                                        />
+                                                    ))
+                                                )}
                                             </div>
                                         </>
                                     )}
@@ -394,18 +405,17 @@ const DirectBacklogView = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem 1rem', borderRadius: '8px' }}>
                                 <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Destination:</span>
                                 <select 
-                                    value={exportTarget}
-                                    onChange={(e) => setExportTarget(e.target.value)}
-                                    style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.95rem', fontWeight: '500', outline: 'none', cursor: 'pointer' }}
+                                    value="ado"
+                                    disabled
+                                    style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '0.95rem', fontWeight: '500', outline: 'none' }}
                                 >
                                     <option value="ado" style={{ color: '#000' }}>Azure DevOps</option>
-                                    <option value="jira" style={{ color: '#000' }}>Jira Software</option>
                                 </select>
                             </div>
 
                             <button className="btn-primary" onClick={handlePublish} disabled={isPublishing || publishSuccess} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                {isPublishing ? <Loader2 size={16} className="spin" /> : <UploadCloud size={16} />}
-                                {isPublishing ? 'Publishing...' : publishSuccess ? `✨ Published to ${exportTarget.toUpperCase()}!` : `Publish to ${exportTarget === 'ado' ? 'ADO' : 'Jira'}`}
+                                {isPublishing ? <Loader2 size={16} className="spin" /> : <img src="/assets/icons/Azure-DevOps.png" width="18" height="18" alt="ADO" style={{ verticalAlign: 'middle' }} />}
+                                {isPublishing ? 'Publishing...' : publishSuccess ? '✨ Published to ADO!' : 'Publish to Azure DevOps'}
                             </button>
                         </div>
                     </div>
